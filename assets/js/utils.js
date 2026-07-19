@@ -52,10 +52,36 @@ PhilApp.utils = (function () {
     return (x * 100).toFixed(digits == null ? 2 : digits) + "%";
   }
 
+  function clampScore(s) {
+    s = Number(s);
+    if (!isFinite(s)) return 0;
+    return Math.max(0, Math.min(100, Math.round(s)));
+  }
+
+  // 점수 → 색상 클래스 (좋음/보통/약함)
+  function scoreClass(s) {
+    s = clampScore(s);
+    if (s >= 75) return "sc-high";
+    if (s >= 55) return "sc-mid";
+    if (s >= 35) return "sc-low";
+    return "sc-crit";
+  }
+
+  // 점수 → 라벨
+  function scoreLabel(s) {
+    s = clampScore(s);
+    if (s >= 90) return "탁월";
+    if (s >= 75) return "우수";
+    if (s >= 55) return "보통";
+    if (s >= 35) return "약함";
+    return "부재";
+  }
+
   return {
     $: $, show: show, hide: hide,
     esc: esc, escMultiline: escMultiline,
     fmtInt: fmtInt, fmtCompact: fmtCompact, fmtDate: fmtDate,
-    daysBetween: daysBetween, pct: pct
+    daysBetween: daysBetween, pct: pct,
+    clampScore: clampScore, scoreClass: scoreClass, scoreLabel: scoreLabel
   };
 })();
