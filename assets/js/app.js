@@ -12,6 +12,18 @@
   function openSettings() {
     $("yt-key").value = storage.getYT();
     $("gm-key").value = storage.getGM();
+    // 내장(공용) 키가 활성화돼 있으면 안내 표시
+    var b = storage.usingBuiltin();
+    var note = $("settings-builtin-note");
+    if (note) {
+      if (b.yt || b.gm) {
+        note.innerHTML = "✅ 현재 <b>공용 키</b>로 바로 사용할 수 있습니다. 키를 비워두면 공용 키가 쓰이며, " +
+          "본인 키를 입력하면 개인 할당량으로 <b>사용 제한 없이</b> 사용됩니다.";
+        u.show(note);
+      } else {
+        u.hide(note);
+      }
+    }
     u.show($("view-settings"));
     u.hide($("view-main"));
     window.scrollTo(0, 0);
@@ -57,8 +69,20 @@
       return;
     }
 
+    // 공용(내장) 키를 쓸 때만 브라우저별 사용 제한 적용. 본인 키면 제한 없음.
+    var b = storage.usingBuiltin();
+    var usingShared = b.yt || b.gm;
+    if (usingShared) {
+      var gate = P.ratelimit.check();
+      if (!gate.allowed) {
+        ui.banner(u.esc(gate.message), "info");
+        return;
+      }
+    }
+
     $("btn-analyze").disabled = true;
     u.show($("loading"));
+    if (usingShared) P.ratelimit.record();  // 공용 키 사용 1회 기록
 
     var channelObj = null;
     yt.resolveChannel(parsed)

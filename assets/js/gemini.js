@@ -33,7 +33,7 @@ PhilApp.gemini = (function () {
   }
 
   function generate(promptText) {
-    var key = storage.getGM();
+    var key = storage.apiGM();
     var body = JSON.stringify({
       contents: [{ role: "user", parts: [{ text: promptText }] }],
       generationConfig: cfg.GEMINI_GENERATION
@@ -56,7 +56,7 @@ PhilApp.gemini = (function () {
         var reason = reasonOf(res.data);
         // 인증/키/한도 오류는 다음 모델로 넘겨도 동일하므로 즉시 중단
         if (res.status === 429) {
-          throw new Error("Gemini API 호출 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.");
+          throw new Error("Gemini 무료 사용 한도(분당/일일)에 도달했습니다. 잠시 후 또는 내일 다시 시도해 주세요. (설정에서 본인의 Gemini API 키를 입력하면 바로 사용할 수 있습니다.)");
         }
         if (res.status === 400 && /API_KEY_INVALID|API key not valid/i.test(reason)) {
           throw new Error("Gemini API 키가 올바르지 않습니다. 설정에서 키를 다시 확인해 주세요.");

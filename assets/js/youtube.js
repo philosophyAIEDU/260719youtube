@@ -15,7 +15,7 @@ PhilApp.youtube = (function () {
     try { msg = data.error.message || ""; } catch (e) {}
 
     if (status === 403 && /quota|dailyLimitExceeded|rateLimitExceeded/i.test(reason)) {
-      return "YouTube API 호출 한도를 초과했습니다. 잠시 후 다시 시도하거나 내일 다시 시도해 주세요.";
+      return "오늘 YouTube 무료 사용 한도가 모두 소진되었습니다. 한도는 매일(태평양 시간 자정) 자동 초기화되니 내일 다시 시도해 주세요. (설정에서 본인의 YouTube API 키를 입력하면 바로 사용할 수 있습니다.)";
     }
     if ((status === 400 || status === 403) && /keyInvalid|API key not valid/i.test(reason + msg)) {
       return "YouTube Data API 키가 올바르지 않습니다. 설정에서 키를 다시 확인해 주세요.";
@@ -27,7 +27,7 @@ PhilApp.youtube = (function () {
   }
 
   function apiFetch(endpoint, params) {
-    params = Object.assign({}, params, { key: storage.getYT() });
+    params = Object.assign({}, params, { key: storage.apiYT() });
     var qs = Object.keys(params).map(function (k) {
       return encodeURIComponent(k) + "=" + encodeURIComponent(params[k]);
     }).join("&");

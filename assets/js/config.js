@@ -6,6 +6,27 @@
 window.PhilApp = window.PhilApp || {};
 
 PhilApp.config = {
+  /* ===================================================================
+   * ⭐ 공용(내장) API 키 — 여기에 '제한 걸린' 무료 티어 키를 붙여넣으면
+   *    방문자가 각자 키를 발급받지 않아도 앱이 바로 동작합니다.
+   *    (비워두면 예전처럼 사용자가 설정에서 직접 입력해야 합니다)
+   *
+   *  ‼️ 반드시 아래 '제한'을 걸고 넣으세요. 클라이언트 앱에서는 키가 공개됩니다.
+   *   1) YouTube 키 (Google Cloud Console → 사용자 인증 정보 → 키 편집)
+   *        · 애플리케이션 제한: HTTP 리퍼러 →  당신앱.netlify.app/*
+   *        · API 제한: 'YouTube Data API v3' 만 선택
+   *   2) Gemini 키 (같은 콘솔에서 키 편집)
+   *        · API 제한: 'Generative Language API' 만 선택
+   *  ‼️ 그리고 두 프로젝트 모두 '결제(빌링) 연결 안 함' → 무료 한도 초과 시
+   *     요금이 청구되지 않고 그냥 멈췄다가 다음 날 초기화됩니다.
+   * =================================================================== */
+  BUILTIN_YT_KEY: "",   // 예: "AIzaSy...(제한 걸린 YouTube 키)"
+  BUILTIN_GM_KEY: "",   // 예: "AIzaSy...(제한 걸린 Gemini 키)"
+
+  /* 브라우저별 사용 제한 — 공용 키를 한 사람이 태워버리지 못하게 보호.
+   * (서버가 없어 전체 합산은 불가. 한 방문자당 한도 + API 자동정지의 2중 보호) */
+  RATE_LIMIT: { perHour: 8, perDay: 25 },
+
   YT_API_BASE: "https://www.googleapis.com/youtube/v3/",
   GEMINI_API_BASE: "https://generativelanguage.googleapis.com/v1beta/models/",
 
