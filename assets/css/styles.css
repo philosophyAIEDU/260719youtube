@@ -582,3 +582,76 @@ footer.foot { margin-top: 46px; text-align: center; color: var(--muted); font-si
   .chat-panel { width: 100%; }
   .chat-toggle { justify-content: center; }
 }
+
+/* =====================================================================
+ * 📁 내 채널 상담 기록 대시보드 (지속 상담 AI 컨설턴트 기능)
+ * ===================================================================== */
+.channel-history { margin: 22px 0; }
+.chd-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.chd-head h2 { margin: 0; font-size: 1.1rem; font-weight: 750; }
+
+.chd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.chd-card {
+  display: flex; flex-direction: column; gap: 12px; padding: 16px;
+  background: linear-gradient(180deg, var(--card), var(--card-2));
+  border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-sm);
+}
+.chd-thumb { width: 100%; height: 110px; object-fit: cover; border-radius: 11px; background: var(--panel); }
+.chd-thumb-empty { display: flex; align-items: center; justify-content: center; font-size: 2rem; }
+.chd-info { flex: 1; }
+.chd-name { font-weight: 750; font-size: .98rem; margin-bottom: 6px; }
+.chd-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: .78rem; color: var(--muted); }
+.chd-score {
+  font-weight: 800; font-size: .78rem; padding: 3px 9px; border-radius: 999px;
+  background: rgba(255,255,255,.06); border: 1px solid var(--border);
+}
+.chd-score.sc-high { color: var(--green); border-color: rgba(55,211,155,.35); }
+.chd-score.sc-mid  { color: var(--amber); border-color: rgba(245,177,61,.35); }
+.chd-score.sc-low  { color: var(--orange); border-color: rgba(240,138,75,.35); }
+.chd-score.sc-crit { color: var(--red); border-color: rgba(242,99,95,.35); }
+.chd-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.chd-actions .btn { flex: 1; white-space: nowrap; }
+.chd-actions .chd-del { flex: 0 0 auto; padding: 8px 12px; }
+
+/* ---------- 지난 분석 대비 점수 변화 (JS 로 직접 계산, AI 서술 아님) ---------- */
+.trend-delta {
+  display: inline-flex; align-items: center; gap: 8px; margin-top: 10px;
+  padding: 5px 12px; border-radius: 999px; font-size: .82rem; font-weight: 700;
+}
+.trend-delta.trend-up   { background: rgba(55,211,155,.14); color: var(--green); border: 1px solid rgba(55,211,155,.35); }
+.trend-delta.trend-down { background: rgba(242,99,95,.13); color: #ff9a97; border: 1px solid rgba(242,99,95,.35); }
+.trend-delta.trend-flat { background: rgba(139,163,191,.14); color: var(--muted); border: 1px solid var(--border); }
+.trend-detail { font-weight: 500; color: var(--muted); font-size: .78rem; }
+
+.trend-note {
+  margin-top: 16px; padding: 13px 16px; border-radius: 12px;
+  background: var(--panel); border-left: 3px solid var(--teal);
+}
+.trend-note p { margin: 8px 0 0; color: var(--text-2); font-size: .9rem; }
+
+/* ---------- 이 채널의 지난 상담 이력 타임라인 ---------- */
+.history-timeline { margin-top: 10px; }
+.history-timeline summary {
+  cursor: pointer; font-size: .82rem; font-weight: 700; color: var(--teal);
+  list-style: none; display: flex; align-items: center; gap: 6px;
+}
+.history-timeline summary::-webkit-details-marker { display: none; }
+.history-timeline summary::before { content: "▸"; transition: transform .15s; }
+.history-timeline[open] summary::before { transform: rotate(90deg); }
+.history-list { margin: 10px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.history-list li {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: .82rem;
+  padding: 8px 12px; background: var(--bg); border: 1px solid var(--border-soft); border-radius: 9px;
+}
+.hl-date { color: var(--muted); flex-shrink: 0; }
+.hl-score {
+  font-weight: 800; font-size: .76rem; padding: 2px 8px; border-radius: 999px;
+  background: rgba(255,255,255,.06); border: 1px solid var(--border); flex-shrink: 0;
+}
+.hl-score.sc-high { color: var(--green); } .hl-score.sc-mid { color: var(--amber); }
+.hl-score.sc-low  { color: var(--orange); } .hl-score.sc-crit { color: var(--red); }
+.hl-verdict { color: var(--text-2); }
+
+@media (max-width: 480px) {
+  .chd-grid { grid-template-columns: 1fr; }
+}

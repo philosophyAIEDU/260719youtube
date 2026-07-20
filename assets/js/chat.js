@@ -1,13 +1,17 @@
 /* =====================================================================
- * chat.js — 하단 고정 후속 질문 채팅 위젯.
+ * chat.js — 하단 고정 후속 질문(상담) 채팅 위젯.
  *   분석이 끝난 채널에 대해 자유롭게 후속 질문을 할 수 있습니다.
- *   그라운딩: 실제 채널 데이터 + 방금 완료한 분석 결과 (prompts.buildChatSystem)
+ *   그라운딩: 실제 채널 데이터 + 최신 분석 결과 + 지난 상담 기록 (prompts.buildChatSystem)
+ *
+ *   대화 내용은 채널별로 localStorage 에 저장됩니다(PhilApp.history).
+ *   같은 채널을 나중에 다시 열면 이전 대화가 그대로 이어집니다.
  * ===================================================================== */
 window.PhilApp = window.PhilApp || {};
 
 PhilApp.chat = (function () {
   var u, P, $;
-  var history = [];   // [{role:"user"|"model", text}]
+  var history = [];   // [{role:"user"|"model", text}]  — 현재 채널의 전체 대화
+  var currentChannelId = null;
   var enabled = false;
   var busy = false;
 
@@ -33,20 +37,35 @@ PhilApp.chat = (function () {
     if (w.classList.contains("open")) $("chat-input").focus();
   }
 
+  // 채널을 바꿔서 새로 분석을 시작할 때 호출 — 화면만 비우고, 저장된 기록 자체는 지우지 않음
   function reset() {
     history = [];
+    currentChannelId = null;
     $("chat-messages").innerHTML = "";
     setOpen(false);
   }
 
-  function enable(channelTitle) {
+  function persist() {
+    if (currentChannelId) P.history.saveChatLog(currentChannelId, history);
+  }
+
+  function enable(channelTitle, channelId) {
     enabled = true;
+    currentChannelId = channelId || null;
     var w = $("chat-widget");
     w.classList.remove("disabled");
     $("chat-input").disabled = false;
     $("chat-send").disabled = false;
     $("chat-hint").textContent = "“" + channelTitle + "” 채널의 서사·점수·조언에 대해 무엇이든 물어보세요.";
-    if (!history.length) {
+
+    $("chat-messages").innerHTML = "";
+    var saved = currentChannelId ? P.history.getChatLog(currentChannelId) : [];
+    if (saved.length) {
+      history = saved.slice();
+      history.forEach(function (m) { addMessage(m.role === "user" ? "user" : "model", m.text); });
+      addMessage("model", "다시 오셨네요. 이전 대화에 이어서 “" + channelTitle + "” 채널에 대해 계속 상담해 드릴게요.");
+    } else {
+      history = [];
       addMessage("model",
         "분석이 끝났습니다. “" + channelTitle + "” 채널의 브랜드 서사, 점수, 다음 영상 아이디어 등에 대해 " +
         "궁금한 점을 편하게 물어보세요. 실제 수집된 데이터에 근거해서만 답변드립니다.");
@@ -111,27 +130,31 @@ PhilApp.chat = (function () {
     addMessage("user", q);
     history.push({ role: "user", text: q });
 
-    // 대화가 길어지면 오래된 턴을 잘라 프롬프트 크기 제어
+    // 대화가 길어지면 오래된 턴을 잘라 프롬프트 크기 제어(저장은 전체 유지, 프롬프트만 최근 것만 사용)
     var maxMsgs = (P.config.CHAT_MAX_TURNS || 12) * 2;
-    if (history.length > maxMsgs) history = history.slice(history.length - maxMsgs);
+    var forPrompt = history.length > maxMsgs ? history.slice(history.length - maxMsgs) : history;
 
     busy = true;
     $("chat-send").disabled = true;
     addTyping();
     if (usingShared) P.ratelimit.record();
+    persist();   // 질문을 보내기 전에도 저장 — 응답 전에 창을 닫아도 질문은 남도록
 
-    var systemText = P.prompts.buildChatSystem(P.state.channel, P.state.videos, P.state.signals, P.state.lastResult);
+    var pastHistory = currentChannelId ? P.history.getHistory(currentChannelId) : [];
+    var systemText = P.prompts.buildChatSystem(P.state.channel, P.state.videos, P.state.signals, P.state.lastResult, pastHistory);
 
-    P.gemini.chat(history, systemText)
+    P.gemini.chat(forPrompt, systemText)
       .then(function (out) {
         removeTyping();
         addMessage("model", out.text);
         history.push({ role: "model", text: out.text });
+        persist();
       })
       .catch(function (err) {
         removeTyping();
         // 실패한 사용자 질문은 히스토리에서 제거(다음 질문 문맥 오염 방지)
         history.pop();
+        persist();
         addMessage("model", (err && err.message) || "답변 생성 중 오류가 발생했습니다.", { error: true });
       })
       .finally(function () {

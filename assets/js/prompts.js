@@ -95,6 +95,25 @@ PhilApp.prompts = (function () {
     return lines.join("\n") + "\n";
   }
 
+  // 이 채널의 과거 분석 기록(최신순 배열, PhilApp.history.getHistory 결과)을
+  // "지난 상담 요약" 텍스트로 압축. 메인 분석(트렌드 인지)과 채팅(상담 연속성) 양쪽에 사용.
+  function buildHistoryDigest(history, maxItems) {
+    if (!history || !history.length) return "";
+    var items = history.slice(0, maxItems || PhilApp.config.MAX_HISTORY_DIGEST_ITEMS || 5);
+    var lines = ["", "[이 채널의 지난 상담 기록 " + items.length + "건 — 최신순. " +
+      "당신이 예전에 이 채널을 상담했던 세션들입니다. 이번 답변은 이 흐름을 이어가며,\n" +
+      "무엇이 나아졌는지/제자리인지/후퇴했는지 언급하세요]"];
+    items.forEach(function (r, i) {
+      var sc = (r.result && r.result.scorecard) || {};
+      lines.push((i + 1) + ") " + u.fmtDate(r.at) + " — 종합 " + (sc.overall != null ? sc.overall : "-") +
+        "점(" + (sc.grade || "-") + ") — " + (sc.oneLineVerdict || ""));
+      if (r.result && r.result.priorityActions && r.result.priorityActions.length) {
+        lines.push("   그때 제안했던 최우선 액션: " + r.result.priorityActions[0].action);
+      }
+    });
+    return lines.join("\n") + "\n";
+  }
+
   // 채널 정보 + 신호 + 대표 샘플 원문(+자막 발췌) — 메인 분석과 채팅이 공유하는 데이터 컨텍스트
   function buildDataContext(channel, videos, sig, sampleSize) {
     var sn = channel.snippet || {};
@@ -122,11 +141,19 @@ transcriptBlock(videos) +
 "──────────────────────────────\n";
   }
 
-  function build(channel, videos, sig) {
+  function build(channel, videos, sig, history) {
+    var hasHistory = !!(history && history.length);
     var header =
-"당신은 유튜브 채널의 '브랜드 서사(Brand Narrative) 전략가'입니다.\n" +
+"당신은 유튜브 채널의 '브랜드 서사(Brand Narrative) 전략가'" + (hasHistory ? "이자, 이 채널을 꾸준히 지켜봐 온 담당 컨설턴트" : "") + "입니다.\n" +
 "당신의 임무는 성장 해킹이 아니라, 한 창작자의 '진짜 이야기'를 발견하고 그것이 자라도록 돕는 것입니다.\n" +
 "\n" +
+(hasHistory ?
+"■ 이번은 첫 분석이 아니라 " + (history.length + 1) + "번째 상담입니다\n" +
+"- 아래 [지난 상담 기록]을 반드시 참고해, 이전에 지적한 부분이 이번엔 나아졌는지/그대로인지/\n" +
+"  더 나빠졌는지 짚으세요. 단순 반복이 아니라 '지속 상담'으로서 진전을 평가하세요.\n" +
+"- scorecard.dimensions 의 점수를 지난 기록과 비교해 냉정하게 매기세요. 근거 없이 점수를\n" +
+"  올리거나 내리지 말고, 실제 데이터(제목/통계) 변화가 있을 때만 점수를 움직이세요.\n\n"
+: "") +
 "■ 반드시 지켜야 할 분석 원칙 (이것이 이 분석의 전부입니다)\n" +
 "1. 이 창작자가 '왜(Why)' 이 채널을 시작했는지 — 어떤 문제의식, 사명, 하고 싶은 말이 있었는지 —\n" +
 "   를 채널 소개글·영상 제목 패턴·반복 주제·설명글의 어조에서 추론하는 것을 최우선으로 하세요.\n" +
@@ -161,7 +188,7 @@ transcriptBlock(videos) +
 "- 창작자를 존중하되, 도움이 되도록 솔직하게. 서사가 약하면 약하다고, 왜 그런지 근거와 함께.\n" +
 "- 모든 답변은 자연스러운 한국어로, 실행 가능한 조언 위주로 작성하세요.\n";
 
-    var context = buildDataContext(channel, videos, sig);
+    var context = buildDataContext(channel, videos, sig) + buildHistoryDigest(history);
 
     var schema =
 "\n위 데이터를 근거로 아래 JSON 스키마에 '정확히' 맞춰서만 응답하세요.\n" +
@@ -211,7 +238,10 @@ transcriptBlock(videos) +
 '  "nextVideos": [   // 다음에 만들면 좋을 영상 4~5개 (서사를 확장하는 방향, 조회수 노림수 아님)\n' +
 '    { "title": "구체적 영상 제목 후보", "reason": "이 채널의 메시지·서사에 맞는 이유", "howItBuildsNarrative": "채널 서사를 어떻게 한 걸음 더 쌓는지 1~2문장" }\n' +
 "  ],\n" +
-'  "summary": "이 채널의 서사적 정체성과 나아갈 방향을 따뜻하지만 솔직하게 정리한 3~5문장 총평"\n' +
+'  "summary": "이 채널의 서사적 정체성과 나아갈 방향을 따뜻하지만 솔직하게 정리한 3~5문장 총평"' + (hasHistory ? ",\n" : "\n") +
+(hasHistory ?
+'  "trendNote": "지난 상담(들) 대비 이번엔 무엇이 나아졌는지/그대로인지/후퇴했는지 데이터 근거와 함께 2~4문장. 반드시 구체적 변화(점수, 업로드 패턴, 새 시도 등)를 언급"\n'
+: "") +
 "}\n";
 
     return header + context + schema;
@@ -221,7 +251,7 @@ transcriptBlock(videos) +
    * 채팅용 시스템 지침 — 이미 생성된 분석 결과 + 데이터 컨텍스트를 근거로
    * 후속 질문에 답하게 함. 새 사실을 지어내지 않도록 강하게 제약.
    * --------------------------------------------------------------- */
-  function buildChatSystem(channel, videos, sig, lastResult) {
+  function buildChatSystem(channel, videos, sig, lastResult, history) {
     var sn = channel.snippet || {};
     var resultDigest = "";
     if (lastResult) {
@@ -233,23 +263,26 @@ transcriptBlock(videos) +
         if (lastResult.coreMessage) lines.push("핵심 메시지(Why): " + lastResult.coreMessage.inferredWhy);
         if (lastResult.positioningStatement) lines.push("포지셔닝: " + lastResult.positioningStatement);
         if (lastResult.summary) lines.push("총평: " + lastResult.summary);
-        resultDigest = "\n[방금 완료한 분석 결과 요약 — 후속 답변은 이 결과와 모순되지 않아야 합니다]\n" + lines.join("\n") + "\n";
+        resultDigest = "\n[가장 최근 분석 결과 요약 — 후속 답변은 이 결과와 모순되지 않아야 합니다]\n" + lines.join("\n") + "\n";
       } catch (e) {}
     }
 
-    return "당신은 유튜브 채널 '" + (sn.title || "이 채널") + "'을 방금 분석한 브랜드 서사 전략가입니다.\n" +
+    var isOngoing = history && history.length > 1;   // 최신 기록 1건은 위 resultDigest와 중복이므로 2건 이상일 때만 별도 표기
+    return "당신은 유튜브 채널 '" + (sn.title || "이 채널") + "'을 " +
+(isOngoing ? "꾸준히 상담해 온 담당 AI 유튜브 컨설턴트" : "방금 분석한 브랜드 서사 전략가") + "입니다.\n" +
 "사용자(채널 운영자로 추정)의 후속 질문에 답하세요.\n" +
 "\n" +
 "■ 반드시 지킬 것\n" +
-"1. 아래 제공된 실제 채널 데이터와 방금 완료한 분석 결과에 근거해서만 답하세요.\n" +
+"1. 아래 제공된 실제 채널 데이터와 분석 결과(및 지난 상담 기록이 있다면 그것)에 근거해서만 답하세요.\n" +
 "2. 데이터에 없는 내용(예: 제공되지 않은 특정 영상의 세부 정보)을 질문받으면,\n" +
 "   지어내지 말고 '제공된 데이터에는 없어 정확히 답하기 어렵다'고 솔직히 말하세요.\n" +
-"3. 이전 분석과 일관성을 유지하세요. 조회수 지상주의로 답하지 말고, 메시지·서사·차별성\n" +
-"   관점을 계속 유지하세요.\n" +
+"3. 메시지·서사·차별성 관점을 계속 유지하세요. 조회수 지상주의로 답하지 마세요.\n" +
 "4. 자극적 주제나 일반적인 유튜브 성장 팁(썸네일, SEO, 업로드 시간 등)을 권하지 마세요.\n" +
 "5. 한국어로, 간결하고 실용적으로(보통 2~6문장, 목록이 필요하면 짧은 목록) 답하세요.\n" +
 "6. 마크다운 헤더나 코드펜스 없이 자연스러운 대화체 텍스트로만 답하세요.\n" +
+(isOngoing ? "7. 이 채널을 여러 번 상담해왔다는 사실을 자연스럽게 활용하세요(예: '지난번에 말씀드린 ~은 어떻게 되셨나요').\n" : "") +
 resultDigest +
+buildHistoryDigest(history) +
 buildDataContext(channel, videos, sig, 30);
   }
 
@@ -294,6 +327,7 @@ buildDataContext(channel, videos, sig, 30);
     buildDataContext: buildDataContext,
     buildChatSystem: buildChatSystem,
     buildVerifyPrompt: buildVerifyPrompt,
+    buildHistoryDigest: buildHistoryDigest,
     signalText: signalBlock   // 투명성 패널에서 원본 통계 텍스트를 그대로 노출할 때 사용
   };
 })();

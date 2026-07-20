@@ -248,9 +248,12 @@
           channelVideoCount: channelObj.statistics ? Number(channelObj.statistics.videoCount || 0) : null
         });
 
+        // 이 채널을 예전에도 분석한 적 있으면(지속 상담), 그 기록을 프롬프트/화면에 함께 반영
+        var pastHistory = P.history.getHistory(channelObj.id);
+
         P.state.set({ channel: channelObj, videos: videos, signals: sig });
 
-        ui.renderResults(channelObj, videos, sig);
+        ui.renderResults(channelObj, videos, sig, pastHistory);
         if (bundle.transcriptNote) ui.banner(u.esc(bundle.transcriptNote), "info");
 
         if (!videos.length) {
@@ -258,14 +261,17 @@
           return;
         }
 
-        var prompt = P.prompts.build(channelObj, videos, sig);
+        var prompt = P.prompts.build(channelObj, videos, sig, pastHistory);
 
         P.gemini.analyze(prompt)
           .then(function (out) {
+            P.history.saveAnalysis(channelObj, sig, out.result, out.model);
+            var fullHistory = P.history.getHistory(channelObj.id);   // 방금 저장한 기록 포함, 최신순
             P.state.set({ lastResult: out.result, lastModel: out.model });
-            ui.renderAnalysis(out.result, out.model);
+            ui.renderAnalysis(out.result, out.model, fullHistory);
             var chanTitle = (channelObj.snippet && channelObj.snippet.title) || "이 채널";
-            P.chat.enable(chanTitle);
+            P.chat.enable(chanTitle, channelObj.id);
+            ui.renderChannelDashboard();
           })
           .catch(function (err) { ui.aiError((err && err.message) || "AI 분석 중 오류가 발생했습니다."); });
       })
@@ -286,7 +292,99 @@
     if (e.key === "Enter") analyze();
   });
 
+  /* ---------- 📁 내 채널 상담 기록: 다시 분석 / 상담 계속하기 / 삭제 ---------- */
+
+  // "다시 분석" — 전체 재분석(YouTube+Gemini 새로 호출). 기존 analyze() 흐름을 그대로 재사용.
+  function rerunAnalysis(channelId) {
+    $("chan-input").value = channelId;
+    window.scrollTo(0, 0);
+    analyze();
+  }
+
+  // "상담 계속하기" — Gemini 를 다시 호출하지 않고, 저장된 마지막 분석 결과를 그대로 불러와
+  // 화면에 표시하고 채팅(대화 기록 포함)을 바로 이어갑니다. YouTube 데이터만 가볍게 새로고침.
+  function continueConsulting(channelId) {
+    var latest = P.history.getLatest(channelId);
+    if (!latest) {
+      ui.banner("이 채널의 저장된 상담 기록을 찾을 수 없습니다.", "error");
+      return;
+    }
+
+    ui.banner("");
+    u.hide($("results"));
+    P.state.reset();
+    P.chat.reset();
+    P.chat.disable();
+
+    $("btn-analyze").disabled = true;
+    setLoadingText("저장된 상담 기록을 불러오는 중입니다...");
+    u.show($("loading"));
+
+    yt.resolveChannel({ type: "id", value: channelId })
+      .then(function (channel) {
+        setLoadingText("최신 채널 데이터를 가볍게 확인하는 중입니다...");
+        return yt.fetchAllVideos(channel, { cap: P.config.MAX_VIDEOS_FETCH }).then(function (fetchOut) {
+          return { channel: channel, fetchOut: fetchOut };
+        });
+      })
+      .then(function (bundle) {
+        u.hide($("loading"));
+        $("btn-analyze").disabled = false;
+
+        var channel = bundle.channel;
+        var videos = bundle.fetchOut.videos;
+        videos.sort(function (a, b) { return new Date(b.publishedAt) - new Date(a.publishedAt); });
+
+        var sig = P.analysis.computeSignals(channel, videos, {
+          fetchedCount: bundle.fetchOut.fetchedCount,
+          truncated: bundle.fetchOut.truncated,
+          channelVideoCount: channel.statistics ? Number(channel.statistics.videoCount || 0) : null
+        });
+
+        var fullHistory = P.history.getHistory(channelId);
+        P.state.set({ channel: channel, videos: videos, signals: sig, lastResult: latest.result, lastModel: latest.model });
+
+        ui.renderResults(channel, videos, sig, fullHistory.slice(1));
+        ui.renderAnalysis(latest.result, latest.model, fullHistory);
+        ui.banner("💬 저장된 상담 기록(" + u.fmtDate(latest.at) + " 분석)을 불러왔습니다. 대화를 이어가 보세요.", "info");
+
+        var chanTitle = (channel.snippet && channel.snippet.title) || "이 채널";
+        P.chat.enable(chanTitle, channelId);
+      })
+      .catch(function (err) {
+        u.hide($("loading"));
+        $("btn-analyze").disabled = false;
+        ui.banner(u.esc((err && err.message) || "채널 데이터를 불러오지 못했습니다."), "error");
+      });
+  }
+
+  function deleteChannelRecord(channelId, title) {
+    var ok = window.confirm("“" + title + "” 채널의 상담 기록과 대화 내용을 삭제할까요? 이 작업은 되돌릴 수 없습니다.");
+    if (!ok) return;
+    P.history.deleteChannel(channelId);
+    ui.renderChannelDashboard();
+  }
+
+  var channelHistoryEl = $("channel-history");
+  if (channelHistoryEl) {
+    channelHistoryEl.addEventListener("click", function (e) {
+      var btn = e.target.closest && e.target.closest("[data-action]");
+      if (!btn) return;
+      var action = btn.getAttribute("data-action");
+      var channelId = btn.getAttribute("data-channel-id");
+      if (!channelId) return;
+      if (action === "reanalyze") rerunAnalysis(channelId);
+      else if (action === "consult") continueConsulting(channelId);
+      else if (action === "delete") {
+        var card = btn.closest(".chd-card");
+        var titleEl = card && card.querySelector(".chd-name");
+        deleteChannelRecord(channelId, titleEl ? titleEl.textContent : "이");
+      }
+    });
+  }
+
   /* ---------- 초기화 ---------- */
   P.chat.init();
+  ui.renderChannelDashboard();
   if (!storage.hasKeys()) openSettings();
 })();

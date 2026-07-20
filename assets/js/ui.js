@@ -44,7 +44,7 @@ PhilApp.ui = (function () {
   }
 
   /* ---------- 데이터 출처(Provenance) 배너 — 신빙성 기능 ① ---------- */
-  function provenanceBanner(sig) {
+  function provenanceBanner(sig, history) {
     var now = new Date();
     var stamp = now.getFullYear() + "." + String(now.getMonth() + 1).padStart(2, "0") + "." +
       String(now.getDate()).padStart(2, "0") + " " + String(now.getHours()).padStart(2, "0") + ":" +
@@ -62,6 +62,7 @@ PhilApp.ui = (function () {
       '<span class="prov-sep">·</span><span class="prov-item">분석 시각 ' + esc(stamp) + '</span>' +
       (sig.transcriptCount ? '<span class="prov-sep">·</span><span class="prov-item prov-transcript">🎙️ 자막 기반 분석 포함 (본인 채널 인증, ' + sig.transcriptCount + '개 영상)</span>' : '') +
       '</div>' +
+      (history && history.length ? historyTimeline(history) : '') +
       '<details class="data-transparency">' +
       '<summary>🔍 AI가 실제로 참고한 원본 데이터 통계 보기 <span class="dt-hint">(신빙성 검증용 원문 공개)</span></summary>' +
       '<pre>' + esc(P.prompts.signalText(sig)) + '</pre>' +
@@ -69,7 +70,22 @@ PhilApp.ui = (function () {
       '</div>';
   }
 
-  function renderResults(channel, videos, sig) {
+  /* ---------- 이 채널의 지난 상담 이력 (지속 상담 기능) ---------- */
+  function historyTimeline(history) {
+    return '<details class="history-timeline">' +
+      '<summary>🕓 이 채널 상담 이력 보기 (' + history.length + '건) <span class="dt-hint">지금까지의 점수 추이</span></summary>' +
+      '<ul class="history-list">' + history.map(function (r) {
+        var sc = (r.result && r.result.scorecard) || {};
+        return '<li>' +
+          '<span class="hl-date">' + u.fmtDate(r.at) + '</span>' +
+          '<span class="hl-score ' + u.scoreClass(sc.overall) + '">' + (sc.overall != null ? sc.overall : "-") + '점 (' + esc(sc.grade || "-") + ')</span>' +
+          '<span class="hl-verdict">' + esc(sc.oneLineVerdict || "") + '</span>' +
+          '</li>';
+      }).join("") + '</ul>' +
+      '</details>';
+  }
+
+  function renderResults(channel, videos, sig, history) {
     currentVideos = videos.slice();
     sortState = { key: "views", dir: -1 };
     pageState = { page: 0 };
@@ -104,8 +120,8 @@ PhilApp.ui = (function () {
     html += '<span class="metric-note">이 수치는 <b>맥락</b>일 뿐, 평가 기준이 아닙니다</span>';
     html += '</div>';
 
-    // 데이터 출처 배너 (신빙성)
-    html += provenanceBanner(sig);
+    // 데이터 출처 배너 (신빙성) + 지난 상담 이력
+    html += provenanceBanner(sig, history);
 
     // 01 스코어카드 (중심)
     html += sec("01", "ai-score", "브랜드 서사 스코어카드", { cls: "ai", txt: "AI 정량 평가" });
@@ -176,6 +192,20 @@ PhilApp.ui = (function () {
       '</div>';
   }
 
+  // 지난 분석 대비 점수 변화 — AI 서술이 아니라 JS로 직접 계산해 신뢰도 확보
+  function trendDelta(sc, previous) {
+    if (!previous) return "";
+    var prevSc = (previous.result && previous.result.scorecard) || {};
+    if (sc.overall == null || prevSc.overall == null) return "";
+    var delta = sc.overall - prevSc.overall;
+    var cls = delta > 0 ? "trend-up" : delta < 0 ? "trend-down" : "trend-flat";
+    var arrow = delta > 0 ? "▲ +" + delta : delta < 0 ? "▼ " + delta : "− 변화 없음";
+    return '<div class="trend-delta ' + cls + '">' +
+      '<span class="trend-arrow">' + esc(arrow) + '</span>' +
+      '<span class="trend-detail">지난 분석(' + esc(u.fmtDate(previous.at)) + ', ' + prevSc.overall + '점) 대비</span>' +
+      '</div>';
+  }
+
   function scoreBar(dim) {
     var s = u.clampScore(dim.score);
     var cls = u.scoreClass(s);
@@ -235,9 +265,12 @@ PhilApp.ui = (function () {
     }).join("") + '</ul>';
   }
 
-  function renderAnalysis(res, modelUsed) {
+  function renderAnalysis(res, modelUsed, fullHistory) {
     var r = res || {};
     lastReport = { res: r, model: modelUsed };
+
+    // fullHistory: PhilApp.history.getHistory(channelId) 호출 결과(최신순, 방금 저장된 현재 기록이 [0])
+    var previous = (fullHistory && fullHistory.length > 1) ? fullHistory[1] : null;
 
     // 01 스코어카드
     var sc = r.scorecard || {};
@@ -248,7 +281,11 @@ PhilApp.ui = (function () {
     scHtml += '<div class="score-verdict">' +
       '<div class="sv-label">종합 브랜드 서사 점수</div>' +
       '<div class="sv-text">' + esc(sc.oneLineVerdict || "") + '</div>' +
+      trendDelta(sc, previous) +
       '</div></div>';
+    if (r.trendNote) {
+      scHtml += '<div class="trend-note"><span class="evi-t">📈 지난 상담 대비 변화</span><p>' + escML(r.trendNote) + '</p></div>';
+    }
     scHtml += '<div class="dims">' + dims.map(scoreBar).join("") + '</div>';
     scHtml += '<div class="verify-row">' +
       '<button class="btn mini" id="btn-verify">🔎 결과 재검증 (AI 자체 감사)</button>' +
@@ -533,10 +570,47 @@ PhilApp.ui = (function () {
       .forEach(function (id) { if ($(id + "-body")) $(id + "-body").innerHTML = html; });
   }
 
+  /* =====================================================================
+   * 📁 내 채널 상담 기록 대시보드 — 메인 화면. 지속 상담의 시작점.
+   *   버튼은 data-action(consult|reanalyze|delete) + data-channel-id 로
+   *   렌더링만 하고, 실제 동작은 app.js 가 이벤트 위임으로 처리합니다.
+   * ===================================================================== */
+  function renderChannelDashboard() {
+    var container = $("channel-history");
+    if (!container) return;
+    var channels = P.history.listChannels();
+    if (!channels.length) { container.innerHTML = ""; u.hide(container); return; }
+
+    var html = '<div class="chd-head"><h2>📁 내 채널 상담 기록</h2>' +
+      '<span class="tag ctx">' + channels.length + '개 채널</span></div>';
+    html += '<div class="chd-grid">';
+    channels.forEach(function (c) {
+      var scoreCls = c.lastScore != null ? u.scoreClass(c.lastScore) : "";
+      html += '<div class="chd-card">';
+      html += c.thumbnail ? '<img class="chd-thumb" src="' + esc(c.thumbnail) + '" alt="" />' : '<div class="chd-thumb chd-thumb-empty">🎬</div>';
+      html += '<div class="chd-info">';
+      html += '<div class="chd-name">' + esc(c.title) + '</div>';
+      html += '<div class="chd-meta">';
+      if (c.lastScore != null) html += '<span class="chd-score ' + scoreCls + '">' + c.lastScore + '점 (' + esc(c.lastGrade || "-") + ')</span>';
+      html += '<span class="chd-date">' + esc(u.fmtDate(c.lastAnalyzedAt)) + ' · ' + (c.analysisCount || 1) + '회 상담</span>';
+      html += '</div></div>';
+      html += '<div class="chd-actions">';
+      html += '<button class="btn mini" data-action="consult" data-channel-id="' + esc(c.id) + '">💬 상담 계속하기</button>';
+      html += '<button class="btn mini primary" data-action="reanalyze" data-channel-id="' + esc(c.id) + '">🔄 다시 분석</button>';
+      html += '<button class="btn mini ghost chd-del" data-action="delete" data-channel-id="' + esc(c.id) + '" title="이 채널 기록 삭제">🗑</button>';
+      html += '</div></div>';
+    });
+    html += '</div>';
+
+    container.innerHTML = html;
+    u.show(container);
+  }
+
   return {
     banner: banner,
     renderResults: renderResults,
     renderAnalysis: renderAnalysis,
+    renderChannelDashboard: renderChannelDashboard,
     aiError: aiError
   };
 })();

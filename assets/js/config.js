@@ -120,6 +120,17 @@ PhilApp.config = {
   // 채팅에서 유지할 최근 대화 턴 수 (오래된 턴은 잘라 프롬프트 크기 제어)
   CHAT_MAX_TURNS: 12,
 
+  /* ===================================================================
+   * 📁 분석 기록 저장 — "매번 새로 분석"이 아니라 채널별로 이력을 쌓아가며
+   *    지속적으로 상담할 수 있게 합니다. 전부 이 브라우저의 localStorage 에만
+   *    저장되고(서버 없음), 채널당 최근 N개 기록만 유지해 용량을 관리합니다.
+   * =================================================================== */
+  MAX_HISTORY_PER_CHANNEL: 20,     // 채널당 보관할 최대 분석 기록 수
+  MAX_HISTORY_DIGEST_ITEMS: 5,     // 다음 분석 프롬프트에 "지난 상담 요약"으로 포함할 최근 기록 수
+  LS_CHANNEL_INDEX: "phil_channel_index",   // 지금까지 분석한 채널 목록(요약)
+  LS_HISTORY_PREFIX: "phil_history_",       // + 채널ID → 그 채널의 전체 분석 기록 배열
+  LS_CHATLOG_PREFIX: "phil_chatlog_",       // + 채널ID → 그 채널의 상담(채팅) 대화 기록
+
   LS_YT: "phil_yt_api_key",  // localStorage 키
   LS_GM: "phil_gm_api_key",
   LS_OAUTH: "phil_oauth_client_id",   // 사용자가 직접 입력한 OAuth 클라이언트 ID (자막 기능용)
