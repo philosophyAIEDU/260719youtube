@@ -204,6 +204,19 @@ transcriptBlock(videos) +
 "  명시하고, fit 을 낮게 매기세요. 돈이 된다고 다 추천하지 마세요.\n" +
 "- 지금 구독자·조회수 규모에서 비현실적인 방법(예: 팔로워 100명인데 대형 브랜드 협찬)은 제안하지\n" +
 "  말고, 지금 단계에서 실제로 시작 가능한 것 위주로 제안하세요.\n" +
+(isEarlyStage ? "" :
+"- 이 채널은 데이터가 충분합니다(영상 " + videos.length + "개, 구독자 " +
+  (channel.statistics && channel.statistics.hiddenSubscriberCount ? "비공개" : Number((channel.statistics && channel.statistics.subscriberCount) || 0).toLocaleString("ko-KR") + "명") +
+  ", 평균 조회수 " + sig.avgViews.toLocaleString("ko-KR") + "). 막연한 조언 대신 이 실제 규모와\n" +
+"  [공명 상위 5개]/[도달 상위 5개]에 드러난 실제 패턴을 근거로 삼아 훨씬 더 구체적이고 현실적으로\n" +
+"  제안하세요. 가능하면 이 규모대에서 통상적인 단가·전환율 감(예: '이 정도 평균 조회수·참여율이면\n" +
+"  스폰서십 단가는 대략 얼마 선대, 멤버십 전환은 구독자의 몇 % 정도가 현실적')을 근거와 함께 제시하고,\n" +
+"  실제 플랫폼명(유튜브 멤버십, 패트리온, 굼로드, 클래스101 등)까지 구체적으로 언급하세요.\n" +
+"- 공명 상위 영상에서 반복되는 주제를 수익화 아이디어와 직접 연결하세요(예: '「실제 영상 제목」류가\n" +
+"  참여율이 특히 높았으니, 이 주제를 확장한 미니 코스/디지털 상품이 적합').\n" +
+"- 방법 하나만 나열하지 말고, monetizationPortfolioNote 에 2~3개 방법이 서로 어떻게 보완되는\n" +
+"  조합(포트폴리오)을 이루는지, 왜 이 조합이 지금 이 채널에 맞는지 구체적으로 설명하세요.\n"
+) +
 "\n" +
 "■ 태도\n" +
 "- 창작자를 존중하되, 도움이 되도록 솔직하게. 서사가 약하면 약하다고, 왜 그런지 근거와 함께.\n" +
@@ -269,10 +282,14 @@ transcriptBlock(videos) +
 "  ],\n" +
 '  "monetizationAdvice": [   // 이 채널의 메시지·니치·오디언스·현재 규모에 맞는 수익화 방법 3~5개\n' +
 '    { "method": "구체적 수익화 방법(예: 브랜드 협찬, 멤버십, 디지털 상품, 강의/컨설팅, 제휴 마케팅 등)",\n' +
-'      "fit": "높음"|"보통"|"낮음", "why": "왜 이 채널에 맞는지(또는 안 맞는지) 데이터·니치 근거",\n' +
-'      "howToStart": "지금 단계에서 구체적으로 어떻게 시작할지 1~2문장",\n' +
+'      "fit": "높음"|"보통"|"낮음", "why": "왜 이 채널에 맞는지(또는 안 맞는지) 데이터·니치 근거. 데이터가\n' +
+'        충분하면 실제 규모(구독자/평균 조회수)와 공명 상위 영상의 실제 주제·제목을 인용해 구체적으로",\n' +
+'      "howToStart": "지금 단계에서 구체적으로 어떻게 시작할지 1~2문장. 가능하면 실제 플랫폼명과\n' +
+'        (데이터가 충분하면) 이 규모대의 통상적인 단가/전환율 감을 포함",\n' +
 '      "risk": "이 방법이 브랜드 서사·진정성을 해칠 수 있는 지점 (없으면 빈 문자열)" }\n' +
 "  ],\n" +
+'  "monetizationPortfolioNote": "위 방법들을 조합했을 때의 전체 수익화 전략 2~3문장. 왜 이 조합이\n' +
+'    지금 이 채널에 맞는지, 데이터가 충분하면 실제 수치·공명 패턴을 근거로. 방법이 1개뿐이면 빈 문자열",\n' +
 '  "summary": "이 채널의 서사적 정체성과 나아갈 방향을 따뜻하지만 솔직하게 정리한 3~5문장 총평"' + (hasHistory ? ",\n" : "\n") +
 (hasHistory ?
 '  "trendNote": "지난 상담(들) 대비 이번엔 무엇이 나아졌는지/그대로인지/후퇴했는지 데이터 근거와 함께 2~4문장. 반드시 구체적 변화(점수, 업로드 패턴, 새 시도 등)를 언급"\n'
@@ -302,6 +319,7 @@ transcriptBlock(videos) +
         }
         if (lastResult.monetizationAdvice && lastResult.monetizationAdvice.length) {
           lines.push("제안했던 수익화 방법: " + lastResult.monetizationAdvice.map(function (m) { return m.method; }).join(", "));
+          if (lastResult.monetizationPortfolioNote) lines.push("수익화 조합 전략: " + lastResult.monetizationPortfolioNote);
         }
         if (lastResult.summary) lines.push("총평: " + lastResult.summary);
         resultDigest = "\n[가장 최근 분석 결과 요약 — 후속 답변은 이 결과와 모순되지 않아야 합니다]\n" + lines.join("\n") + "\n";

@@ -400,6 +400,8 @@ PhilApp.ui = (function () {
     // 수익화 컨설팅
     var ma = r.monetizationAdvice || [];
     $("ai-monetize-body").innerHTML = '<div class="card">' +
+      (r.monetizationPortfolioNote ?
+        '<div class="positioning"><span class="evi-t">💼 조합 전략</span><p class="lead">' + escML(r.monetizationPortfolioNote) + '</p></div>' : '') +
       (ma.length ? ma.map(function (m) {
         return '<div class="review-row"><div class="review-head">' +
           levelBadge(m.fit, "적합도") +
@@ -583,6 +585,7 @@ PhilApp.ui = (function () {
     }
     if (r.monetizationAdvice && r.monetizationAdvice.length) {
       L.push("## 수익화 컨설팅");
+      if (r.monetizationPortfolioNote) { L.push("> " + r.monetizationPortfolioNote); L.push(""); }
       r.monetizationAdvice.forEach(function (m) {
         L.push("- **" + (m.method || "") + "** [" + (m.fit || "") + "] — " + (m.why || ""));
         if (m.howToStart) L.push("  - 시작: " + m.howToStart);
