@@ -57,6 +57,45 @@
     if (el) el.textContent = text;
   }
 
+  // 자막(체크박스 켜짐) 요청 시: 로그인 → 본인 채널 확인 → 대표 샘플 자막 수집.
+  // 실패해도 절대 메인 흐름을 막지 않고, 안내 문구(note)만 반환합니다.
+  function maybeAttachTranscripts(channel, videos) {
+    var cb = $("chk-transcript");
+    if (!cb || !cb.checked) return Promise.resolve(null);
+
+    if (!P.config.GOOGLE_OAUTH_CLIENT_ID) {
+      return Promise.resolve("이 배포에는 자막 분석용 Google 로그인이 설정되어 있지 않아 자막 분석은 건너뛰고 제목·설명 기반으로만 분석합니다.");
+    }
+
+    var tGate = P.ratelimit.transcript.check();
+    if (!tGate.allowed) {
+      return Promise.resolve("자막 분석 " + tGate.message.replace(/^잠시 후 다시 시도해 주세요\. /, ""));
+    }
+
+    setLoadingText("Google 로그인을 진행해 주세요 (본인 채널일 때만 자막이 반영됩니다)...");
+    return P.auth.signIn()
+      .then(function (token) { return P.captions.getMyChannel(token).then(function (me) { return { token: token, me: me }; }); })
+      .then(function (info) {
+        if (info.me.id !== channel.id) {
+          return "로그인한 계정(" + info.me.title + ")이 이 채널의 소유자가 아니어서 자막 분석은 건너뛰고 제목·설명 기반으로만 분석합니다.";
+        }
+        P.ratelimit.transcript.record();
+        return P.captions.attachTranscripts(videos, info.token, {
+          maxCount: P.config.TRANSCRIPT_MAX_VIDEOS,
+          onProgress: function (p) {
+            setLoadingText("본인 채널 확인됨 — 자막을 가져오는 중입니다... (" + p.index + "/" + p.total + ") " + p.title);
+          }
+        }).then(function (res) {
+          return res.succeeded
+            ? null
+            : "자막을 가져오지 못했습니다(비공개이거나 자막이 없는 영상일 수 있음). 제목·설명 기반으로 분석합니다.";
+        });
+      })
+      .catch(function (err) {
+        return (err && err.message) || "자막 분석 중 오류가 발생해 건너뛰고 제목·설명 기반으로만 분석합니다.";
+      });
+  }
+
   /* ---------- 분석 흐름 ---------- */
   function analyze() {
     ui.banner("");
@@ -111,11 +150,18 @@
         });
       })
       .then(function (fetchOut) {
+        var videos = fetchOut.videos;
+        videos.sort(function (a, b) { return new Date(b.publishedAt) - new Date(a.publishedAt); });
+
+        return maybeAttachTranscripts(channelObj, videos).then(function (transcriptNote) {
+          return { fetchOut: fetchOut, videos: videos, transcriptNote: transcriptNote };
+        });
+      })
+      .then(function (bundle) {
         u.hide($("loading"));
         $("btn-analyze").disabled = false;
 
-        var videos = fetchOut.videos;
-        videos.sort(function (a, b) { return new Date(b.publishedAt) - new Date(a.publishedAt); });
+        var videos = bundle.videos, fetchOut = bundle.fetchOut;
 
         var sig = P.analysis.computeSignals(channelObj, videos, {
           fetchedCount: fetchOut.fetchedCount,
@@ -126,6 +172,7 @@
         P.state.set({ channel: channelObj, videos: videos, signals: sig });
 
         ui.renderResults(channelObj, videos, sig);
+        if (bundle.transcriptNote) ui.banner(u.esc(bundle.transcriptNote), "info");
 
         if (!videos.length) {
           ui.aiError("영상이 없어 서사 분석을 진행할 수 없습니다.");
@@ -162,5 +209,12 @@
 
   /* ---------- 초기화 ---------- */
   P.chat.init();
+  if (!P.config.GOOGLE_OAUTH_CLIENT_ID) {
+    var chkT = $("chk-transcript");
+    if (chkT) {
+      chkT.disabled = true;
+      chkT.title = "이 배포에는 자막 분석 기능이 설정되어 있지 않습니다.";
+    }
+  }
   if (!storage.hasKeys()) openSettings();
 })();

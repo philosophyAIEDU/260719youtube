@@ -60,6 +60,7 @@ PhilApp.ui = (function () {
       '<span class="prov-item">' + esc(coverage) + '</span>' +
       '<span class="prov-sep">·</span><span class="prov-item">활동 기간 ' + esc(range) + '</span>' +
       '<span class="prov-sep">·</span><span class="prov-item">분석 시각 ' + esc(stamp) + '</span>' +
+      (sig.transcriptCount ? '<span class="prov-sep">·</span><span class="prov-item prov-transcript">🎙️ 자막 기반 분석 포함 (본인 채널 인증, ' + sig.transcriptCount + '개 영상)</span>' : '') +
       '</div>' +
       '<details class="data-transparency">' +
       '<summary>🔍 AI가 실제로 참고한 원본 데이터 통계 보기 <span class="dt-hint">(신빙성 검증용 원문 공개)</span></summary>' +

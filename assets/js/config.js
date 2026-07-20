@@ -27,6 +27,36 @@ PhilApp.config = {
    * (서버가 없어 전체 합산은 불가. 한 방문자당 한도 + API 자동정지의 2중 보호) */
   RATE_LIMIT: { perHour: 8, perDay: 25 },
 
+  /* ===================================================================
+   * 🎙️ 자막(스크립트) 분석 — 선택 기능 (기본 꺼짐, 사용자가 체크박스로 켤 때만 동작)
+   *
+   *  YouTube 공식 API 로 자막 원문을 받으려면 OAuth 로그인이 필수이며,
+   *  그 자막이 '로그인한 계정이 소유한 채널'의 것일 때만 허용됩니다.
+   *  → 이 기능은 '자기 채널을 분석할 때'만 동작하고, 남의 채널 분석에는
+   *    적용되지 않습니다(제목/설명 기반 분석은 그대로 동작).
+   *
+   *  설정 방법 (Google Cloud Console, YouTube 키와 같은 프로젝트에서):
+   *   1) API 및 서비스 → OAuth 동의 화면 설정
+   *   2) API 및 서비스 → 사용자 인증 정보 → + 만들기 → OAuth 클라이언트 ID
+   *      → 유형: '웹 애플리케이션' → 승인된 자바스크립트 원본에
+   *        배포 주소(예: https://당신앱.netlify.app) 등록
+   *   3) 발급된 클라이언트 ID를 아래에 붙여넣기
+   *
+   *  ‼️ 비용 주의: captions.list 는 50 단위, captions.download 는 200 단위
+   *     (영상 1개 자막 = 최대 250 단위)로 매우 비쌉니다. 하루 10,000 단위
+   *     한도 안에서 TRANSCRIPT_MAX_VIDEOS 와 TRANSCRIPT_RATE_LIMIT 을
+   *     보수적으로 유지하세요. 비워두면 자막 기능 자체가 비활성화됩니다.
+   * =================================================================== */
+  GOOGLE_OAUTH_CLIENT_ID: "",   // 예: "1234567890-abc...apps.googleusercontent.com"
+  OAUTH_SCOPE: "https://www.googleapis.com/auth/youtube.force-ssl",
+
+  TRANSCRIPT_MAX_VIDEOS: 5,     // 자막을 가져올 대표 샘플 영상 개수 (비용 보호를 위해 소수만)
+  TRANSCRIPT_EXCERPT_CHARS: 1200,
+  TRANSCRIPT_FORMAT: "srt",
+
+  // 자막 기능 전용 사용 제한 (일반 RATE_LIMIT 과 별도 — 훨씬 비싼 API 라 더 엄격)
+  TRANSCRIPT_RATE_LIMIT: { perHour: 1, perDay: 3 },
+
   YT_API_BASE: "https://www.googleapis.com/youtube/v3/",
   GEMINI_API_BASE: "https://generativelanguage.googleapis.com/v1beta/models/",
 

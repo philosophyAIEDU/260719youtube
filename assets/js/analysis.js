@@ -152,6 +152,7 @@ PhilApp.analysis = (function () {
       fetchedCount: meta.fetchedCount != null ? meta.fetchedCount : videos.length,
       truncated: !!meta.truncated,
       channelVideoCount: meta.channelVideoCount != null ? meta.channelVideoCount : null,
+      transcriptCount: videos.filter(function (v) { return !!v.transcriptExcerpt; }).length,
 
       avgViews: Math.round(avgViews),
       medianViews: Math.round(medViews),

@@ -78,6 +78,15 @@
         </div>
         <div class="hint">예: <code>@philosophy</code>, <code>youtube.com/@philosophy</code>, <code>youtube.com/channel/UC...</code></div>
       </div>
+      <label class="transcript-toggle" for="chk-transcript">
+        <input type="checkbox" id="chk-transcript" />
+        <span>🎙️ 내가 이 채널의 소유자라면, 자막(실제 발화 내용)까지 반영해 더 정확하게 분석하기</span>
+      </label>
+      <div class="hint transcript-hint">
+        체크하고 분석하면 Google 로그인 창이 뜹니다. 로그인한 계정이 <b>이 채널의 소유자일 때만</b> 자막이 반영되며,
+        다른 사람 채널을 분석할 때는 이 옵션과 무관하게 제목·설명 기반으로 분석됩니다. 자막 API 호출 비용이 커서
+        대표 영상 소수(기본 5개)만 가져오며, 브라우저당 사용 횟수에 제한이 있습니다.
+      </div>
     </div>
 
     <div id="global-banner"></div>
@@ -122,8 +131,10 @@
 <script src="assets/js/storage.js"></script>
 <script src="assets/js/state.js"></script>
 <script src="assets/js/ratelimit.js"></script>
+<script src="assets/js/auth.js"></script>
 <script src="assets/js/youtube.js"></script>
 <script src="assets/js/analysis.js"></script>
+<script src="assets/js/captions.js"></script>
 <script src="assets/js/prompts.js"></script>
 <script src="assets/js/gemini.js"></script>
 <script src="assets/js/ui.js"></script>

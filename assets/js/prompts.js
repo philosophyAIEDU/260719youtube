@@ -82,7 +82,20 @@ PhilApp.prompts = (function () {
     return lines.join("\n");
   }
 
-  // 채널 정보 + 신호 + 대표 샘플 원문 — 메인 분석과 채팅이 공유하는 데이터 컨텍스트
+  // 자막(스크립트) 발췌 블록 — 본인 채널 인증 후에만 존재. 제목보다 신뢰도 높은 근거.
+  function transcriptBlock(videos) {
+    var withT = videos.filter(function (v) { return v.transcriptExcerpt; });
+    if (!withT.length) return "";
+    var lines = ["", "[실제 발화 내용 발췌 " + withT.length + "개 — 본인 채널 로그인 인증 후 자막에서 직접 추출됨. " +
+      "제목/설명보다 신뢰도 높은 1차 근거로 우선 활용하세요]"];
+    withT.forEach(function (v, i) {
+      lines.push((i + 1) + ") 「" + v.title + "」");
+      lines.push("   " + v.transcriptExcerpt);
+    });
+    return lines.join("\n") + "\n";
+  }
+
+  // 채널 정보 + 신호 + 대표 샘플 원문(+자막 발췌) — 메인 분석과 채팅이 공유하는 데이터 컨텍스트
   function buildDataContext(channel, videos, sig, sampleSize) {
     var sn = channel.snippet || {};
     var st = channel.statistics || {};
@@ -105,6 +118,7 @@ PhilApp.prompts = (function () {
 signalBlock(sig) + "\n" +
 "\n[대표 샘플 영상 원문 " + sample.length + "개 — 상위 조회수·상위 참여율·최신·초창기·시간축 균등분포를 섞어 선정. 최신순 정렬]\n" +
 summarizeVideos(sample) +
+transcriptBlock(videos) +
 "──────────────────────────────\n";
   }
 
@@ -127,6 +141,8 @@ summarizeVideos(sample) +
 "- evidence, aligned, drifting 등 '근거' 필드에는 실제 제공된 영상 제목을 그대로(따옴표 없이,\n" +
 "  원문 그대로) 적으세요. 지어내지 마세요. 제공되지 않은 영상 제목을 인용하면 안 됩니다.\n" +
 "- 확신이 낮으면 confidence 를 낮게 표시하세요. 데이터가 부족해 판단이 어려우면 그렇다고 명시하세요.\n" +
+"- [실제 발화 내용 발췌]가 제공된 경우, 그것은 채널 소유자 인증 후 자막에서 직접 추출한 1차 자료입니다.\n" +
+"  제목만으로 추측하는 것보다 그 발화 내용을 우선적인 근거로 삼아 메시지·톤·일관성을 판단하세요.\n" +
 "\n" +
 "■ 정량 평가(스코어카드) 지침\n" +
 "- 5개 지표를 각각 0~100점으로 매기세요. 반드시 냉정하고 솔직하게. 점수를 부풀리지 마세요.\n" +
