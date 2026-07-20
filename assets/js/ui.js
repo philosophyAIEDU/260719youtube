@@ -3,15 +3,18 @@
  *   · 브랜드 스코어카드(종합 링 게이지 + 지표별 바) = 결과의 중심
  *   · 브랜딩 자산(슬로건/포지셔닝/소개글 리라이트/콘텐츠 기둥/90일 로드맵)
  *   · 점수를 올리는 우선순위 액션
+ *   · 신빙성: 데이터 수집 현황 · 근거(evidence) 실제 영상 대조 검증 ·
+ *            원본 데이터 투명 공개 · AI 자체 재검증(감사) 기능
  *   · 리포트 복사/인쇄
  * ===================================================================== */
 window.PhilApp = window.PhilApp || {};
 
 PhilApp.ui = (function () {
-  var u = PhilApp.utils;
+  var u = PhilApp.utils, P = PhilApp;
   var $ = u.$, esc = u.esc, escML = u.escMultiline;
 
   var sortState = { key: "views", dir: -1 };
+  var pageState = { page: 0 };
   var currentVideos = [];
   var lastReport = null;   // 리포트 복사용
 
@@ -36,16 +39,43 @@ PhilApp.ui = (function () {
   function sec(idx, id, title, badge) {
     return '<section class="block" id="' + id + '">' +
       '<div class="block-head"><span class="idx">' + idx + '</span>' +
-      '<h2>' + title + (badge ? ' <span class="tag ' + badge.cls + '">' + badge.txt + '</span>' : '') + '</h2></div>' +
+      '<h2>' + title + (badge ? ' <span class="tag ' + badge.cls + '">' + esc(badge.txt) + '</span>' : '') + '</h2></div>' +
       '<div id="' + id + '-body"></div></section>';
   }
 
-  function renderResults(channel, videos) {
+  /* ---------- 데이터 출처(Provenance) 배너 — 신빙성 기능 ① ---------- */
+  function provenanceBanner(sig) {
+    var now = new Date();
+    var stamp = now.getFullYear() + "." + String(now.getMonth() + 1).padStart(2, "0") + "." +
+      String(now.getDate()).padStart(2, "0") + " " + String(now.getHours()).padStart(2, "0") + ":" +
+      String(now.getMinutes()).padStart(2, "0");
+    var coverage = sig.truncated
+      ? "⚠️ 영상이 많아(채널 공식 " + (sig.channelVideoCount != null ? u.fmtInt(sig.channelVideoCount) : "다수") +
+        "개) 안전 상한으로 최신 " + u.fmtInt(sig.fetchedCount) + "개까지 수집"
+      : "✅ 전체 영상 " + u.fmtInt(sig.fetchedCount) + "개 전수 수집";
+    var range = sig.dateRange ? u.fmtDate(sig.dateRange.oldest) + " ~ " + u.fmtDate(sig.dateRange.newest) : "-";
+
+    return '<div class="provenance">' +
+      '<div class="prov-row">' +
+      '<span class="prov-item">' + esc(coverage) + '</span>' +
+      '<span class="prov-sep">·</span><span class="prov-item">활동 기간 ' + esc(range) + '</span>' +
+      '<span class="prov-sep">·</span><span class="prov-item">분석 시각 ' + esc(stamp) + '</span>' +
+      '</div>' +
+      '<details class="data-transparency">' +
+      '<summary>🔍 AI가 실제로 참고한 원본 데이터 통계 보기 <span class="dt-hint">(신빙성 검증용 원문 공개)</span></summary>' +
+      '<pre>' + esc(P.prompts.signalText(sig)) + '</pre>' +
+      '</details>' +
+      '</div>';
+  }
+
+  function renderResults(channel, videos, sig) {
     currentVideos = videos.slice();
     sortState = { key: "views", dir: -1 };
+    pageState = { page: 0 };
     var sn = channel.snippet || {}, st = channel.statistics || {};
     var thumb = "";
     try { thumb = sn.thumbnails.medium.url || sn.thumbnails.default.url; } catch (e) {}
+    var channelUrl = "https://www.youtube.com/channel/" + encodeURIComponent(channel.id || "");
 
     var html = "";
 
@@ -53,7 +83,7 @@ PhilApp.ui = (function () {
     html += '<div class="result-topbar">';
     html += '<div class="chan-head">';
     if (thumb) html += '<img src="' + esc(thumb) + '" alt="채널 썸네일" />';
-    html += '<div><h2>' + esc(sn.title || "채널") + '</h2>';
+    html += '<div><h2><a href="' + esc(channelUrl) + '" target="_blank" rel="noopener" class="chan-link">' + esc(sn.title || "채널") + ' ↗</a></h2>';
     if (sn.description) {
       var d = sn.description.slice(0, 160);
       html += '<p>' + esc(d) + (sn.description.length > 160 ? "…" : "") + '</p>';
@@ -72,6 +102,9 @@ PhilApp.ui = (function () {
     html += metric(u.fmtDate(sn.publishedAt), "개설일");
     html += '<span class="metric-note">이 수치는 <b>맥락</b>일 뿐, 평가 기준이 아닙니다</span>';
     html += '</div>';
+
+    // 데이터 출처 배너 (신빙성)
+    html += provenanceBanner(sig);
 
     // 01 스코어카드 (중심)
     html += sec("01", "ai-score", "브랜드 서사 스코어카드", { cls: "ai", txt: "AI 정량 평가" });
@@ -95,8 +128,10 @@ PhilApp.ui = (function () {
     html += sec("10", "ai-about", "채널 소개글 리라이트 제안", { cls: "ai", txt: "AI" });
     // 11 다음 영상 제안
     html += sec("11", "ai-next", "다음 영상 제안 · 서사를 확장하는 방향", { cls: "ai", txt: "AI" });
-    // 12 최근 영상 (데이터)
-    html += sec("12", "video", "최근 영상 데이터", { cls: "ctx", txt: "데이터" });
+    // 12 영상 데이터 (전수)
+    html += sec("12", "video",
+      "영상 데이터 전수 분석 <span class=\"count-badge\">" + u.fmtInt(sig.fetchedCount) + "개</span>",
+      { cls: "ctx", txt: sig.truncated ? "부분 수집" : "전수 수집" });
     // 13 총평
     html += sec("13", "ai-summary", "종합 총평", { cls: "ai", txt: "AI" });
 
@@ -111,7 +146,8 @@ PhilApp.ui = (function () {
     $("btn-copy-report").addEventListener("click", copyReport);
 
     // AI 로딩
-    var loading = '<div class="card"><div class="ai-loading"><div class="spinner"></div>Gemini 3.1 Flash Lite 가 브랜드 서사를 정량 분석하고 있습니다...</div></div>';
+    var loading = '<div class="card"><div class="ai-loading"><div class="spinner"></div>Gemini 3.1 Flash Lite 가 전체 ' +
+      u.fmtInt(sig.fetchedCount) + '개 영상 데이터를 바탕으로 브랜드 서사를 정량 분석하고 있습니다...</div></div>';
     ["ai-score","ai-core","ai-brand","ai-actions","ai-roadmap","ai-pillars","ai-topics","ai-review","ai-resonance","ai-about","ai-next","ai-summary"]
       .forEach(function (id) { $(id + "-body").innerHTML = loading; });
   }
@@ -169,6 +205,35 @@ PhilApp.ui = (function () {
     return '<span class="level ' + levelClass(level) + '">' + esc((label ? label + " " : "") + level) + '</span>';
   }
 
+  /* ---------- 근거(evidence) 실제 영상 대조 검증 — 신빙성 기능 ② ---------- */
+  function matchVideo(text, videos) {
+    var t = String(text || "").trim();
+    if (!t || !videos || !videos.length) return null;
+    var tl = t.toLowerCase();
+    for (var i = 0; i < videos.length; i++) {
+      var vt = String(videos[i].title || "").toLowerCase();
+      if (!vt) continue;
+      if (vt === tl) return videos[i];
+      if (vt.length >= 4 && tl.indexOf(vt) !== -1) return videos[i];
+      if (tl.length >= 4 && vt.indexOf(tl) !== -1) return videos[i];
+    }
+    return null;
+  }
+  function evidenceList(arr) {
+    if (!arr || !arr.length) return "";
+    var videos = P.state.videos || [];
+    return '<ul class="evi-list">' + arr.map(function (e) {
+      var m = matchVideo(e, videos);
+      if (m) {
+        return '<li class="evi-verified">' +
+          '<a href="https://youtu.be/' + esc(m.id) + '" target="_blank" rel="noopener">' + esc(e) + '</a>' +
+          ' <span class="evi-check" title="실제 수집된 영상 제목과 대조해 확인됨">✓ 데이터 확인됨</span></li>';
+      }
+      return '<li class="evi-unverified">' + esc(e) +
+        ' <span class="evi-check unverified" title="수집된 영상 목록에서 일치하는 제목을 자동으로 찾지 못했습니다. 패턴에 대한 AI의 해석일 수 있습니다.">AI 해석</span></li>';
+    }).join("") + '</ul>';
+  }
+
   function renderAnalysis(res, modelUsed) {
     var r = res || {};
     lastReport = { res: r, model: modelUsed };
@@ -184,15 +249,21 @@ PhilApp.ui = (function () {
       '<div class="sv-text">' + esc(sc.oneLineVerdict || "") + '</div>' +
       '</div></div>';
     scHtml += '<div class="dims">' + dims.map(scoreBar).join("") + '</div>';
+    scHtml += '<div class="verify-row">' +
+      '<button class="btn mini" id="btn-verify">🔎 결과 재검증 (AI 자체 감사)</button>' +
+      '<span class="verify-hint">AI가 자신의 점수·진단을 원본 통계와 다시 대조해 과장·모순이 없는지 스스로 검토합니다.</span>' +
+      '</div><div id="verify-panel"></div>';
     scHtml += '</div>';
     $("ai-score-body").innerHTML = scHtml;
+    var vbtn = $("btn-verify");
+    if (vbtn) vbtn.addEventListener("click", runVerification);
 
-    // 02 핵심 메시지
+    // 02 핵심 메시지 (근거 검증 포함)
     var cm = r.coreMessage || {};
     $("ai-core-body").innerHTML = '<div class="card prose">' +
       (cm.confidence ? levelBadge(cm.confidence, "메시지 선명도") : "") +
       '<p class="lead">' + escML(cm.inferredWhy || "메시지를 추론하지 못했습니다.") + '</p>' +
-      (cm.evidence && cm.evidence.length ? '<div class="evi"><span class="evi-t">근거</span>' + bullets(cm.evidence, "evi-list") + '</div>' : "") +
+      (cm.evidence && cm.evidence.length ? '<div class="evi"><span class="evi-t">근거 (실제 영상과 자동 대조)</span>' + evidenceList(cm.evidence) + '</div>' : "") +
       '</div>';
 
     // 03 포지셔닝 + 슬로건
@@ -277,7 +348,67 @@ PhilApp.ui = (function () {
       (modelUsed ? '<div class="model-tag">분석 모델: ' + esc(modelUsed) + '</div>' : "") + '</div>';
   }
 
-  /* ---------- 영상 표 ---------- */
+  /* ---------- 재검증(자체 감사) — 신빙성 기능 ③ ---------- */
+  function runVerification() {
+    if (!P.state.isReady() || !P.state.lastResult) return;
+
+    var usingShared = P.storage.usingBuiltin().gm;
+    if (usingShared) {
+      var gate = P.ratelimit.check();
+      if (!gate.allowed) {
+        $("verify-panel").innerHTML = '<div class="banner info" style="margin-top:12px;">' + esc(gate.message) + '</div>';
+        return;
+      }
+    }
+
+    var btn = $("btn-verify"), panel = $("verify-panel");
+    var origText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "검증 중...";
+    panel.innerHTML = '<div class="ai-loading" style="margin-top:14px;"><div class="spinner"></div>' +
+      'Gemini 가 분석 결과를 원본 통계와 다시 대조해 검증하고 있습니다...</div>';
+
+    if (usingShared) P.ratelimit.record();
+
+    var prompt = P.prompts.buildVerifyPrompt(P.state.channel, P.state.signals, P.state.lastResult);
+    P.gemini.analyze(prompt)
+      .then(function (out) { renderVerification(out.result); })
+      .catch(function (err) {
+        panel.innerHTML = '<div class="banner error" style="margin-top:12px;">' +
+          esc((err && err.message) || "검증 중 오류가 발생했습니다.") + '</div>';
+      })
+      .finally(function () {
+        btn.disabled = false;
+        btn.textContent = origText;
+      });
+  }
+
+  function renderVerification(v) {
+    v = v || {};
+    var checks = v.checks || [];
+    var issues = v.issues || [];
+    var cls = v.verified ? "verify-pass" : "verify-fail";
+    var html = '<div class="verify-result ' + cls + '">';
+    html += '<div class="verify-head"><span class="verify-badge">' +
+      (v.verified ? "✓ 검증 통과 — 데이터와 부합" : "⚠ 검토 필요 — 일부 불일치 가능성") + '</span>' +
+      (v.confidence ? levelBadge(v.confidence, "검증 신뢰도") : "") + '</div>';
+    if (v.note) html += '<p class="verify-note">' + escML(v.note) + '</p>';
+    if (checks.length) {
+      html += '<ul class="verify-checks">' + checks.map(function (c) {
+        return '<li class="' + (c.consistent ? "ok" : "warn") + '">' +
+          '<span class="vc-icon">' + (c.consistent ? "✓" : "△") + '</span>' +
+          '<div><div class="vc-claim">' + esc(c.claim || "") + '</div>' +
+          '<div class="vc-note">' + esc(c.note || "") + '</div></div></li>';
+      }).join("") + '</ul>';
+    }
+    if (issues.length) {
+      html += '<div class="evi warn-evi"><span class="evi-t">발견된 이슈</span>' + bullets(issues) + '</div>';
+    }
+    html += '</div>';
+    $("verify-panel").innerHTML = html;
+  }
+
+  /* ---------- 영상 표 (전수, 페이지네이션) ---------- */
   function renderTable() {
     var vids = currentVideos.slice();
     var key = sortState.key, dir = sortState.dir;
@@ -291,7 +422,15 @@ PhilApp.ui = (function () {
     });
     function arw(k) { return key === k ? (dir === 1 ? " ▲" : " ▼") : ""; }
 
-    var h = '<p class="section-note">열 제목을 클릭하면 정렬됩니다. <b>참여율</b>((좋아요+댓글)/조회수)이 높은 영상이 메시지가 실제로 가 닿은 영상일 가능성이 큽니다.</p>';
+    var pageSize = P.config.TABLE_PAGE_SIZE || 25;
+    var totalPages = Math.max(1, Math.ceil(vids.length / pageSize));
+    if (pageState.page >= totalPages) pageState.page = totalPages - 1;
+    if (pageState.page < 0) pageState.page = 0;
+    var startIdx = pageState.page * pageSize;
+    var pageVids = vids.slice(startIdx, startIdx + pageSize);
+
+    var h = '<p class="section-note">열 제목을 클릭하면 전체 ' + vids.length + '개 기준으로 정렬됩니다. ' +
+      '<b>참여율</b>((좋아요+댓글)/조회수)이 높은 영상이 메시지가 실제로 가 닿은 영상일 가능성이 큽니다.</p>';
     h += '<div class="tablewrap"><table><thead><tr>';
     h += '<th>#</th>';
     h += '<th class="sortable" data-k="title">제목<span class="arrow">' + arw("title") + '</span></th>';
@@ -301,10 +440,10 @@ PhilApp.ui = (function () {
     h += '<th class="sortable num" data-k="comments">댓글<span class="arrow">' + arw("comments") + '</span></th>';
     h += '<th class="sortable num" data-k="engagement">참여율<span class="arrow">' + arw("engagement") + '</span></th>';
     h += '</tr></thead><tbody>';
-    vids.forEach(function (v, i) {
+    pageVids.forEach(function (v, i) {
       var er = PhilApp.analysis.engagementRate(v);
       h += '<tr>';
-      h += '<td class="num">' + (i + 1) + '</td>';
+      h += '<td class="num">' + (startIdx + i + 1) + '</td>';
       h += '<td class="title"><a href="https://youtu.be/' + esc(v.id) + '" target="_blank" rel="noopener">' + esc(v.title) + '</a></td>';
       h += '<td>' + u.fmtDate(v.publishedAt) + '</td>';
       h += '<td class="num">' + u.fmtInt(v.views) + '</td>';
@@ -314,6 +453,13 @@ PhilApp.ui = (function () {
       h += '</tr>';
     });
     h += '</tbody></table></div>';
+
+    h += '<div class="table-pagination">' +
+      '<button class="btn mini" id="tbl-prev"' + (pageState.page === 0 ? " disabled" : "") + '>‹ 이전</button>' +
+      '<span class="tbl-page-info">' + (pageState.page + 1) + ' / ' + totalPages + ' 페이지 · 총 ' + vids.length + '개</span>' +
+      '<button class="btn mini" id="tbl-next"' + (pageState.page >= totalPages - 1 ? " disabled" : "") + '>다음 ›</button>' +
+      '</div>';
+
     $("video-body").innerHTML = h;
 
     $("video-body").querySelectorAll("th.sortable").forEach(function (th) {
@@ -321,9 +467,13 @@ PhilApp.ui = (function () {
         var k = th.getAttribute("data-k");
         if (sortState.key === k) sortState.dir *= -1;
         else { sortState.key = k; sortState.dir = (k === "title") ? 1 : -1; }
+        pageState.page = 0;
         renderTable();
       });
     });
+    var prevBtn = $("tbl-prev"), nextBtn = $("tbl-next");
+    if (prevBtn) prevBtn.addEventListener("click", function () { pageState.page--; renderTable(); });
+    if (nextBtn) nextBtn.addEventListener("click", function () { pageState.page++; renderTable(); });
   }
 
   /* ---------- 리포트 복사 (Markdown) ---------- */

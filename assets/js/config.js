@@ -41,7 +41,7 @@ PhilApp.config = {
     "gemini-2.5-flash-lite"
   ],
 
-  // Gemini 생성 파라미터
+  // Gemini 생성 파라미터 (JSON 분석 모드)
   GEMINI_GENERATION: {
     temperature: 0.65,       // 분석의 일관성을 위해 다소 낮게
     topP: 0.95,
@@ -49,7 +49,28 @@ PhilApp.config = {
     responseMimeType: "application/json"
   },
 
-  MAX_VIDEOS: 20,            // 분석에 사용할 최근 영상 개수
+  // Gemini 생성 파라미터 (자유 대화 모드 — 채팅용, JSON 강제 안 함)
+  GEMINI_CHAT_GENERATION: {
+    temperature: 0.6,
+    topP: 0.95,
+    maxOutputTokens: 2048
+  },
+
+  // 채널 전체 영상을 수집합니다. 극단적으로 영상이 많은 채널(수천 개)에서
+  // 브라우저가 멈추거나 무료 할당량을 과도하게 쓰지 않도록 안전 상한만 둡니다.
+  // 상한 이하의 채널은 '전수 수집'됩니다.
+  MAX_VIDEOS_FETCH: 500,
+
+  // Gemini 프롬프트에 실제 제목/설명 원문으로 포함할 대표 샘플 개수
+  // (전체 통계는 위 상한 내 모든 영상으로 계산하되, 원문 인용은 대표 샘플만 사용해
+  //  프롬프트 크기를 합리적으로 유지합니다)
+  PROMPT_SAMPLE_SIZE: 40,
+
+  // 영상 데이터 표 한 페이지당 행 수
+  TABLE_PAGE_SIZE: 25,
+
+  // 채팅에서 유지할 최근 대화 턴 수 (오래된 턴은 잘라 프롬프트 크기 제어)
+  CHAT_MAX_TURNS: 12,
 
   LS_YT: "phil_yt_api_key",  // localStorage 키
   LS_GM: "phil_gm_api_key"

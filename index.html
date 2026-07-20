@@ -61,10 +61,11 @@
         그리고 점수를 올리기 위한 실질적 액션과 브랜딩 자산까지 제안합니다.
       </p>
       <div class="pills">
+        <span class="pill">📚 채널 전체 영상 이력 분석</span>
         <span class="pill">🎯 브랜드 서사 스코어카드</span>
-        <span class="pill">🛠️ 우선순위 개선 액션</span>
+        <span class="pill">🔎 AI 자체 재검증</span>
+        <span class="pill">💬 후속 질문 채팅</span>
         <span class="pill">🗺️ 90일 브랜딩 로드맵</span>
-        <span class="pill">✍️ 슬로건 · 소개글 리라이트</span>
       </div>
     </div>
 
@@ -83,7 +84,7 @@
 
     <div id="loading" class="loading hidden">
       <div class="spinner"></div>
-      <div>채널 데이터를 불러오는 중입니다...</div>
+      <div id="loading-text">채널 데이터를 불러오는 중입니다...</div>
     </div>
 
     <div id="results" class="hidden"></div>
@@ -95,16 +96,38 @@
   </footer>
 </div>
 
+<!-- ===== 하단 고정 후속 질문 채팅 위젯 ===== -->
+<div id="chat-widget" class="chat-widget disabled">
+  <button id="chat-toggle" class="chat-toggle" type="button">
+    <span class="chat-toggle-icon">💬</span>
+    <span class="chat-toggle-text">이 채널에 대해 더 물어보기</span>
+  </button>
+  <div class="chat-panel" id="chat-panel">
+    <div class="chat-panel-head">
+      <span>💬 후속 질문</span>
+      <button id="chat-close" class="chat-close" type="button" aria-label="닫기">✕</button>
+    </div>
+    <div class="chat-messages" id="chat-messages"></div>
+    <div class="chat-input-row">
+      <input id="chat-input" type="text" placeholder="예: 서사 축적력 점수가 왜 낮게 나왔어?" disabled />
+      <button id="chat-send" class="btn primary mini" type="button" disabled>보내기</button>
+    </div>
+    <div class="chat-hint" id="chat-hint">먼저 채널을 분석해야 질문할 수 있습니다.</div>
+  </div>
+</div>
+
 <!-- 모듈별 스크립트 (로드 순서 = 의존성 순서) -->
 <script src="assets/js/config.js"></script>
 <script src="assets/js/utils.js"></script>
 <script src="assets/js/storage.js"></script>
+<script src="assets/js/state.js"></script>
 <script src="assets/js/ratelimit.js"></script>
 <script src="assets/js/youtube.js"></script>
 <script src="assets/js/analysis.js"></script>
 <script src="assets/js/prompts.js"></script>
 <script src="assets/js/gemini.js"></script>
 <script src="assets/js/ui.js"></script>
+<script src="assets/js/chat.js"></script>
 <script src="assets/js/app.js"></script>
 </body>
 </html>

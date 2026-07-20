@@ -102,40 +102,80 @@ PhilApp.youtube = (function () {
     });
   }
 
-  /* ---- 업로드 재생목록에서 최근 영상 + 통계 ---- */
-  function fetchRecentVideos(channel, maxCount) {
+  function mapVideoItem(it) {
+    var s = it.statistics || {};
+    return {
+      id: it.id,
+      title: it.snippet.title,
+      description: it.snippet.description || "",
+      publishedAt: it.snippet.publishedAt,
+      tags: it.snippet.tags || [],
+      duration: it.contentDetails && it.contentDetails.duration || "",
+      views: Number(s.viewCount || 0),
+      likes: s.likeCount != null ? Number(s.likeCount) : null,
+      comments: s.commentCount != null ? Number(s.commentCount) : null
+    };
+  }
+
+  /* ---- 업로드 재생목록의 영상 ID를 끝까지(또는 상한까지) 페이지네이션 수집 ---- */
+  function collectAllVideoIds(uploadsPlaylistId, cap, onProgress) {
+    var ids = [];
+    function page(pageToken) {
+      var params = { part: "contentDetails", playlistId: uploadsPlaylistId, maxResults: 50 };
+      if (pageToken) params.pageToken = pageToken;
+      return apiFetch("playlistItems", params).then(function (d) {
+        var pageIds = (d.items || []).map(function (it) {
+          return it.contentDetails && it.contentDetails.videoId;
+        }).filter(Boolean);
+        ids = ids.concat(pageIds);
+        if (onProgress) onProgress({ phase: "list", collected: ids.length });
+
+        if (ids.length >= cap) return { truncated: !!d.nextPageToken };
+        if (d.nextPageToken) return page(d.nextPageToken);
+        return { truncated: false };
+      });
+    }
+    return page().then(function (info) {
+      var truncated = info.truncated;
+      if (ids.length > cap) { ids = ids.slice(0, cap); truncated = true; }
+      return { ids: ids, truncated: truncated };
+    });
+  }
+
+  /* ---- videos.list 는 한 번에 최대 50개 ID 만 허용 → 배치 호출 ---- */
+  function fetchVideoDetailsBatched(ids, onProgress) {
+    var chunks = [];
+    for (var i = 0; i < ids.length; i += 50) chunks.push(ids.slice(i, i + 50));
+    var out = [];
+    function next(i) {
+      if (i >= chunks.length) return Promise.resolve(out);
+      return apiFetch("videos", { part: "snippet,statistics,contentDetails", id: chunks[i].join(",") })
+        .then(function (v) {
+          out = out.concat((v.items || []).map(mapVideoItem));
+          if (onProgress) onProgress({ phase: "detail", collected: out.length, total: ids.length });
+          return next(i + 1);
+        });
+    }
+    return next(0);
+  }
+
+  /* ---- 채널의 (사실상) 전체 영상 + 통계 수집.
+   *      opts.cap: 안전 상한 (기본 config.MAX_VIDEOS_FETCH)
+   *      opts.onProgress({phase, collected, total}) : 로딩 화면 진행 표시용
+   *      반환: { videos, fetchedCount, truncated, uploadsTotal } */
+  function fetchAllVideos(channel, opts) {
+    opts = opts || {};
+    var cap = opts.cap || cfg.MAX_VIDEOS_FETCH || 500;
+    var onProgress = opts.onProgress;
+
     var uploads;
     try { uploads = channel.contentDetails.relatedPlaylists.uploads; } catch (e) {}
-    if (!uploads) return Promise.resolve([]);
+    if (!uploads) return Promise.resolve({ videos: [], fetchedCount: 0, truncated: false });
 
-    return apiFetch("playlistItems", {
-      part: "contentDetails",
-      playlistId: uploads,
-      maxResults: maxCount
-    }).then(function (d) {
-      var ids = (d.items || []).map(function (it) {
-        return it.contentDetails && it.contentDetails.videoId;
-      }).filter(Boolean);
-      if (!ids.length) return [];
-
-      return apiFetch("videos", {
-        part: "snippet,statistics,contentDetails",
-        id: ids.join(",")
-      }).then(function (v) {
-        return (v.items || []).map(function (it) {
-          var s = it.statistics || {};
-          return {
-            id: it.id,
-            title: it.snippet.title,
-            description: it.snippet.description || "",
-            publishedAt: it.snippet.publishedAt,
-            tags: it.snippet.tags || [],
-            duration: it.contentDetails && it.contentDetails.duration || "",
-            views: Number(s.viewCount || 0),
-            likes: s.likeCount != null ? Number(s.likeCount) : null,
-            comments: s.commentCount != null ? Number(s.commentCount) : null
-          };
-        });
+    return collectAllVideoIds(uploads, cap, onProgress).then(function (idInfo) {
+      if (!idInfo.ids.length) return { videos: [], fetchedCount: 0, truncated: idInfo.truncated };
+      return fetchVideoDetailsBatched(idInfo.ids, onProgress).then(function (videos) {
+        return { videos: videos, fetchedCount: videos.length, truncated: idInfo.truncated };
       });
     });
   }
@@ -143,6 +183,6 @@ PhilApp.youtube = (function () {
   return {
     parseInput: parseInput,
     resolveChannel: resolveChannel,
-    fetchRecentVideos: fetchRecentVideos
+    fetchAllVideos: fetchAllVideos
   };
 })();

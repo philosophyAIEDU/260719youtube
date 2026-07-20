@@ -1,6 +1,7 @@
 /* =====================================================================
  * app.js — 전체 흐름 오케스트레이션 + 설정 화면 제어.
- *   입력 → YouTube 데이터 수집 → 신호 가공 → 프롬프트 → Gemini → 렌더
+ *   입력 → YouTube 전체 영상 수집(페이지네이션) → 신호 가공 → 프롬프트
+ *   → Gemini → 렌더 → 채팅 위젯 활성화
  * ===================================================================== */
 (function () {
   "use strict";
@@ -12,7 +13,6 @@
   function openSettings() {
     $("yt-key").value = storage.getYT();
     $("gm-key").value = storage.getGM();
-    // 내장(공용) 키가 활성화돼 있으면 안내 표시
     var b = storage.usingBuiltin();
     var note = $("settings-builtin-note");
     if (note) {
@@ -52,10 +52,18 @@
     });
   });
 
+  function setLoadingText(text) {
+    var el = $("loading-text");
+    if (el) el.textContent = text;
+  }
+
   /* ---------- 분석 흐름 ---------- */
   function analyze() {
     ui.banner("");
     u.hide($("results"));
+    P.state.reset();
+    P.chat.reset();
+    P.chat.disable();
 
     if (!storage.hasKeys()) {
       ui.banner("먼저 API 키를 입력해야 합니다. 설정 화면으로 이동합니다.", "info");
@@ -81,33 +89,58 @@
     }
 
     $("btn-analyze").disabled = true;
+    setLoadingText("채널 정보를 불러오는 중입니다...");
     u.show($("loading"));
-    if (usingShared) P.ratelimit.record();  // 공용 키 사용 1회 기록
+    if (usingShared) P.ratelimit.record();
 
     var channelObj = null;
     yt.resolveChannel(parsed)
       .then(function (channel) {
         channelObj = channel;
-        return yt.fetchRecentVideos(channel, P.config.MAX_VIDEOS);
+        setLoadingText("채널의 전체 영상 목록을 수집하는 중입니다...");
+        return yt.fetchAllVideos(channel, {
+          cap: P.config.MAX_VIDEOS_FETCH,
+          onProgress: function (p) {
+            if (p.phase === "list") {
+              setLoadingText("영상 목록을 수집하는 중입니다... (" + u.fmtInt(p.collected) + "개 발견)");
+            } else {
+              setLoadingText("영상 상세 데이터(조회수·좋아요·댓글)를 수집하는 중입니다... (" +
+                u.fmtInt(p.collected) + " / " + u.fmtInt(p.total) + ")");
+            }
+          }
+        });
       })
-      .then(function (videos) {
+      .then(function (fetchOut) {
         u.hide($("loading"));
         $("btn-analyze").disabled = false;
 
+        var videos = fetchOut.videos;
         videos.sort(function (a, b) { return new Date(b.publishedAt) - new Date(a.publishedAt); });
-        ui.renderResults(channelObj, videos);
+
+        var sig = P.analysis.computeSignals(channelObj, videos, {
+          fetchedCount: fetchOut.fetchedCount,
+          truncated: fetchOut.truncated,
+          channelVideoCount: channelObj.statistics ? Number(channelObj.statistics.videoCount || 0) : null
+        });
+
+        P.state.set({ channel: channelObj, videos: videos, signals: sig });
+
+        ui.renderResults(channelObj, videos, sig);
 
         if (!videos.length) {
           ui.aiError("영상이 없어 서사 분석을 진행할 수 없습니다.");
           return;
         }
 
-        // 신호 가공 → 프롬프트 → Gemini
-        var sig = P.analysis.computeSignals(channelObj, videos);
         var prompt = P.prompts.build(channelObj, videos, sig);
 
         P.gemini.analyze(prompt)
-          .then(function (out) { ui.renderAnalysis(out.result, out.model); })
+          .then(function (out) {
+            P.state.set({ lastResult: out.result, lastModel: out.model });
+            ui.renderAnalysis(out.result, out.model);
+            var chanTitle = (channelObj.snippet && channelObj.snippet.title) || "이 채널";
+            P.chat.enable(chanTitle);
+          })
           .catch(function (err) { ui.aiError((err && err.message) || "AI 분석 중 오류가 발생했습니다."); });
       })
       .catch(function (err) {
@@ -128,5 +161,6 @@
   });
 
   /* ---------- 초기화 ---------- */
+  P.chat.init();
   if (!storage.hasKeys()) openSettings();
 })();

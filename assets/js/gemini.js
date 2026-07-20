@@ -2,6 +2,9 @@
  * gemini.js — Google Generative Language API 클라이언트
  *   기본 모델: gemini-3.1-flash-lite (필수)
  *   해당 모델이 404 일 때에만 동일 계열 Flash-Lite 후보로 자동 대체.
+ *
+ *   analyze() : JSON 스키마 강제 분석 모드 (스코어카드/재검증 등)
+ *   chat()    : 자유 대화 모드 (후속 질문 채팅용, 일반 텍스트 응답)
  * ===================================================================== */
 window.PhilApp = window.PhilApp || {};
 
@@ -9,7 +12,6 @@ PhilApp.gemini = (function () {
   var cfg = PhilApp.config;
   var storage = PhilApp.storage;
 
-  // 실제로 어떤 모델이 응답했는지 기록 (UI 표시용)
   var lastModelUsed = null;
   function getLastModel() { return lastModelUsed; }
 
@@ -32,12 +34,13 @@ PhilApp.gemini = (function () {
     catch (e) { return ""; }
   }
 
-  function generate(promptText) {
+  // contents: [{role:"user"|"model", parts:[{text}]}, ...]
+  // systemText: 선택적 system instruction (없으면 생략)
+  function generateRaw(contents, generationConfig, systemText) {
     var key = storage.apiGM();
-    var body = JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: promptText }] }],
-      generationConfig: cfg.GEMINI_GENERATION
-    });
+    var payload = { contents: contents, generationConfig: generationConfig };
+    if (systemText) payload.systemInstruction = { parts: [{ text: systemText }] };
+    var body = JSON.stringify(payload);
 
     var candidates = [cfg.GEMINI_MODEL].concat(cfg.GEMINI_FALLBACKS);
 
@@ -54,7 +57,6 @@ PhilApp.gemini = (function () {
           return { data: res.data, model: model };
         }
         var reason = reasonOf(res.data);
-        // 인증/키/한도 오류는 다음 모델로 넘겨도 동일하므로 즉시 중단
         if (res.status === 429) {
           throw new Error("Gemini 무료 사용 한도(분당/일일)에 도달했습니다. 잠시 후 또는 내일 다시 시도해 주세요. (설정에서 본인의 Gemini API 키를 입력하면 바로 사용할 수 있습니다.)");
         }
@@ -64,11 +66,9 @@ PhilApp.gemini = (function () {
         if (res.status === 403) {
           throw new Error("Gemini API 접근이 거부되었습니다. 키 권한 또는 API 활성화 여부를 확인해 주세요.");
         }
-        // 404 / 미지원 → 다음 후보 모델로 자동 대체
         if (res.status === 404 || /not.?found|not supported|unsupported|NOT_FOUND/i.test(reason)) {
           return attempt(i + 1);
         }
-        // 그 외 일시적 오류도 다음 후보 시도
         return attempt(i + 1);
       });
     }
@@ -93,14 +93,29 @@ PhilApp.gemini = (function () {
     return null;
   }
 
-  // 프롬프트 → 파싱된 분석 객체
+  // 프롬프트 → 파싱된 분석 객체 (JSON 스키마 강제)
   function analyze(promptText) {
-    return generate(promptText).then(function (res) {
+    return generateRaw(
+      [{ role: "user", parts: [{ text: promptText }] }],
+      cfg.GEMINI_GENERATION
+    ).then(function (res) {
       var parsed = parseJSON(extractText(res.data));
       if (!parsed) throw new Error("AI 분석 결과(JSON)를 해석하지 못했습니다. 잠시 후 다시 시도해 주세요.");
       return { result: parsed, model: res.model };
     });
   }
 
-  return { analyze: analyze, getLastModel: getLastModel };
+  // 자유 대화 (채팅) — history: [{role:"user"|"model", text}], systemText: 그라운딩 컨텍스트
+  function chat(history, systemText) {
+    var contents = history.map(function (m) {
+      return { role: m.role, parts: [{ text: m.text }] };
+    });
+    return generateRaw(contents, cfg.GEMINI_CHAT_GENERATION, systemText).then(function (res) {
+      var text = extractText(res.data).trim();
+      if (!text) throw new Error("AI 응답을 받지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      return { text: text, model: res.model };
+    });
+  }
+
+  return { analyze: analyze, chat: chat, getLastModel: getLastModel };
 })();
