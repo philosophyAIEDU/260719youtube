@@ -41,10 +41,18 @@ PhilApp.storage = (function () {
     localStorage.removeItem(cfg.LS_GM);
   }
 
+  // ---- OAuth 클라이언트 ID (자막 분석 기능용, 비밀 키 아님) ----
+  function getOAuth() { return (localStorage.getItem(cfg.LS_OAUTH) || "").trim(); }
+  function builtinOAuth() { return (cfg.GOOGLE_OAUTH_CLIENT_ID || "").trim(); }
+  function apiOAuth() { return getOAuth() || builtinOAuth(); }
+  function setOAuth(clientId) { localStorage.setItem(cfg.LS_OAUTH, (clientId || "").trim()); }
+  function hasOAuth() { return !!apiOAuth(); }
+
   return {
     getYT: getYT, getGM: getGM,
     apiYT: apiYT, apiGM: apiGM,
     builtinYT: builtinYT, builtinGM: builtinGM,
-    setKeys: setKeys, hasKeys: hasKeys, usingBuiltin: usingBuiltin, clear: clear
+    setKeys: setKeys, hasKeys: hasKeys, usingBuiltin: usingBuiltin, clear: clear,
+    getOAuth: getOAuth, apiOAuth: apiOAuth, setOAuth: setOAuth, hasOAuth: hasOAuth
   };
 })();

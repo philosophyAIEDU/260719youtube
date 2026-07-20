@@ -40,14 +40,17 @@ PhilApp.config = {
    *   2) API 및 서비스 → 사용자 인증 정보 → + 만들기 → OAuth 클라이언트 ID
    *      → 유형: '웹 애플리케이션' → 승인된 자바스크립트 원본에
    *        배포 주소(예: https://당신앱.netlify.app) 등록
-   *   3) 발급된 클라이언트 ID를 아래에 붙여넣기
+   *   3) 발급된 클라이언트 ID를 아래 값에 붙여넣기 (배포자가 모두를 위해 미리 설정)
+   *      — 또는 여기를 비워둬도, 각 사용자가 화면의 자막 체크박스를 켤 때
+   *        직접 자신의 클라이언트 ID를 입력할 수 있습니다(그 브라우저에만 저장).
+   *        storage.js 의 apiOAuth() 가 '사용자 입력 > 아래 기본값' 순으로 사용합니다.
    *
    *  ‼️ 비용 주의: captions.list 는 50 단위, captions.download 는 200 단위
    *     (영상 1개 자막 = 최대 250 단위)로 매우 비쌉니다. 하루 10,000 단위
    *     한도 안에서 TRANSCRIPT_MAX_VIDEOS 와 TRANSCRIPT_RATE_LIMIT 을
-   *     보수적으로 유지하세요. 비워두면 자막 기능 자체가 비활성화됩니다.
+   *     보수적으로 유지하세요.
    * =================================================================== */
-  GOOGLE_OAUTH_CLIENT_ID: "",   // 예: "1234567890-abc...apps.googleusercontent.com"
+  GOOGLE_OAUTH_CLIENT_ID: "",   // 예: "1234567890-abc...apps.googleusercontent.com" (선택 — 비워둬도 사용자가 화면에서 입력 가능)
   OAUTH_SCOPE: "https://www.googleapis.com/auth/youtube.force-ssl",
 
   TRANSCRIPT_MAX_VIDEOS: 5,     // 자막을 가져올 대표 샘플 영상 개수 (비용 보호를 위해 소수만)
@@ -103,5 +106,6 @@ PhilApp.config = {
   CHAT_MAX_TURNS: 12,
 
   LS_YT: "phil_yt_api_key",  // localStorage 키
-  LS_GM: "phil_gm_api_key"
+  LS_GM: "phil_gm_api_key",
+  LS_OAUTH: "phil_oauth_client_id"   // 사용자가 직접 입력한 OAuth 클라이언트 ID (자막 기능용)
 };

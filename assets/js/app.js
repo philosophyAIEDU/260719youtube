@@ -57,14 +57,46 @@
     if (el) el.textContent = text;
   }
 
+  /* ---------- 자막 기능: OAuth 클라이언트 ID 인라인 설정 ---------- */
+  function updateOauthSetupVisibility() {
+    var cb = $("chk-transcript");
+    var panel = $("oauth-setup");
+    if (!cb || !panel) return;
+    if (cb.checked && !storage.hasOAuth()) {
+      u.show(panel);
+      var input = $("oauth-client-id");
+      if (input) { input.value = storage.getOAuth(); input.focus(); }
+    } else {
+      u.hide(panel);
+    }
+  }
+  var chkTranscript = $("chk-transcript");
+  if (chkTranscript) chkTranscript.addEventListener("change", updateOauthSetupVisibility);
+
+  var btnSaveOauth = $("btn-save-oauth");
+  if (btnSaveOauth) {
+    btnSaveOauth.addEventListener("click", function () {
+      var val = ($("oauth-client-id").value || "").trim();
+      var status = $("oauth-setup-status");
+      if (!val) {
+        if (status) status.innerHTML = '<span class="err">클라이언트 ID를 입력해 주세요.</span>';
+        return;
+      }
+      storage.setOAuth(val);
+      if (status) status.innerHTML = '<span class="ok">✅ 저장되었습니다. 이제 "분석하기"를 누르면 Google 로그인 창이 뜹니다.</span>';
+      setTimeout(function () { u.hide($("oauth-setup")); }, 1400);
+    });
+  }
+
   // 자막(체크박스 켜짐) 요청 시: 로그인 → 본인 채널 확인 → 대표 샘플 자막 수집.
   // 실패해도 절대 메인 흐름을 막지 않고, 안내 문구(note)만 반환합니다.
   function maybeAttachTranscripts(channel, videos) {
     var cb = $("chk-transcript");
     if (!cb || !cb.checked) return Promise.resolve(null);
 
-    if (!P.config.GOOGLE_OAUTH_CLIENT_ID) {
-      return Promise.resolve("이 배포에는 자막 분석용 Google 로그인이 설정되어 있지 않아 자막 분석은 건너뛰고 제목·설명 기반으로만 분석합니다.");
+    if (!storage.hasOAuth()) {
+      updateOauthSetupVisibility();
+      return Promise.resolve("자막 분석에 필요한 Google OAuth 클라이언트 ID가 아직 입력되지 않았습니다. 체크박스 아래 입력란에 입력하고 저장한 뒤 다시 분석해 주세요. 이번 분석은 제목·설명 기반으로 진행합니다.");
     }
 
     var tGate = P.ratelimit.transcript.check();
@@ -209,12 +241,5 @@
 
   /* ---------- 초기화 ---------- */
   P.chat.init();
-  if (!P.config.GOOGLE_OAUTH_CLIENT_ID) {
-    var chkT = $("chk-transcript");
-    if (chkT) {
-      chkT.disabled = true;
-      chkT.title = "이 배포에는 자막 분석 기능이 설정되어 있지 않습니다.";
-    }
-  }
   if (!storage.hasKeys()) openSettings();
 })();

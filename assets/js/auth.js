@@ -12,8 +12,10 @@ window.PhilApp = window.PhilApp || {};
 
 PhilApp.auth = (function () {
   var cfg = PhilApp.config;
+  var storage = PhilApp.storage;
 
   var tokenClient = null;
+  var tokenClientForId = null;   // 어떤 client_id 로 만들어진 tokenClient 인지 (바뀌면 재생성)
   var accessToken = null;
   var tokenExpiresAt = 0;
   var gisLoadPromise = null;
@@ -34,16 +36,20 @@ PhilApp.auth = (function () {
   }
 
   function ensureClient() {
+    var clientId = storage.apiOAuth();
     return loadGis().then(function () {
-      if (!cfg.GOOGLE_OAUTH_CLIENT_ID) {
-        throw new Error("이 배포에는 자막 분석용 Google 로그인이 설정되어 있지 않습니다.");
+      if (!clientId) {
+        throw new Error("자막 분석용 Google OAuth 클라이언트 ID가 아직 설정되지 않았습니다. 체크박스 아래 입력란에 클라이언트 ID를 입력해 주세요.");
       }
-      if (!tokenClient) {
+      if (!tokenClient || tokenClientForId !== clientId) {
         tokenClient = google.accounts.oauth2.initTokenClient({
-          client_id: cfg.GOOGLE_OAUTH_CLIENT_ID,
+          client_id: clientId,
           scope: cfg.OAUTH_SCOPE,
           callback: function () {}   // signIn() 호출마다 재정의됨
         });
+        tokenClientForId = clientId;
+        accessToken = null;   // 클라이언트 ID가 바뀌면 이전 토큰은 무효화
+        tokenExpiresAt = 0;
       }
       return tokenClient;
     });
@@ -53,8 +59,8 @@ PhilApp.auth = (function () {
   function getToken() { return isSignedIn() ? accessToken : null; }
 
   function signIn() {
-    if (isSignedIn()) return Promise.resolve(accessToken);
     return ensureClient().then(function (client) {
+      if (isSignedIn()) return accessToken;   // ensureClient() 에서 ID 변경 시 이미 무효화됨
       return new Promise(function (resolve, reject) {
         client.callback = function (resp) {
           if (resp && resp.access_token) {
