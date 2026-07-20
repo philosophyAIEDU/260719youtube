@@ -17,6 +17,7 @@ PhilApp.ui = (function () {
   var pageState = { page: 0 };
   var currentVideos = [];
   var lastReport = null;   // 리포트 복사용
+  var currentAiIds = [];   // 이번 렌더에 실제로 존재하는 AI 섹션 id 목록 (조건부 섹션 대응)
 
   function banner(html, type) {
     $("global-banner").innerHTML = html
@@ -123,34 +124,39 @@ PhilApp.ui = (function () {
     // 데이터 출처 배너 (신빙성) + 지난 상담 이력
     html += provenanceBanner(sig, history);
 
-    // 01 스코어카드 (중심)
-    html += sec("01", "ai-score", "브랜드 서사 스코어카드", { cls: "ai", txt: "AI 정량 평가" });
-    // 02 핵심 메시지
-    html += sec("02", "ai-core", "핵심 메시지 · 왜 이 채널을 시작했는가", { cls: "ai", txt: "AI" });
-    // 03 포지셔닝 + 슬로건
-    html += sec("03", "ai-brand", "브랜드 한 줄 · 포지셔닝 & 슬로건", { cls: "ai", txt: "AI" });
-    // 04 우선순위 액션
-    html += sec("04", "ai-actions", "점수를 올리는 우선순위 액션", { cls: "ai", txt: "AI" });
-    // 05 90일 로드맵
-    html += sec("05", "ai-roadmap", "90일 브랜딩 로드맵", { cls: "ai", txt: "AI" });
-    // 06 콘텐츠 기둥
-    html += sec("06", "ai-pillars", "콘텐츠 기둥 · 이 채널이 소유할 축", { cls: "ai", txt: "AI" });
-    // 07 주제 태그
-    html += sec("07", "ai-topics", "주제 태그", { cls: "ai", txt: "AI" });
-    // 08 콘텐츠 리뷰
-    html += sec("08", "ai-review", "지금까지 콘텐츠 리뷰 · 브랜드 관점", { cls: "ai", txt: "AI" });
-    // 09 공명 분석
-    html += sec("09", "ai-resonance", "공명 분석 · 어떤 영상이 마음에 가 닿았나", { cls: "ai", txt: "AI" });
-    // 10 소개글 리라이트
-    html += sec("10", "ai-about", "채널 소개글 리라이트 제안", { cls: "ai", txt: "AI" });
-    // 11 다음 영상 제안
-    html += sec("11", "ai-next", "다음 영상 제안 · 서사를 확장하는 방향", { cls: "ai", txt: "AI" });
-    // 12 영상 데이터 (전수)
-    html += sec("12", "video",
+    // 영상이 적은 초기 단계 채널인지 — prompts.js 와 같은 기준으로 판단
+    var isEarlyStage = sig.count <= (P.config.LOW_VIDEO_THRESHOLD || 5);
+
+    // 섹션 번호를 자동 채번(조건부 섹션이 있어도 항상 순서대로 매겨짐)
+    var secIdx = 0;
+    var aiIds = [];
+    function next(id, title, badge, isAi) {
+      secIdx++;
+      if (isAi !== false) aiIds.push(id);
+      return sec(String(secIdx).padStart(2, "0"), id, title, badge);
+    }
+
+    html += next("ai-score", "브랜드 서사 스코어카드", { cls: "ai", txt: "AI 정량 평가" });
+    html += next("ai-core", "핵심 메시지 · 왜 이 채널을 시작했는가", { cls: "ai", txt: "AI" });
+    if (isEarlyStage) {
+      html += next("ai-direction", "방향성 상담 · 초기 단계 채널을 위한 가설과 다음 실험", { cls: "ai", txt: "AI 컨설팅" });
+    }
+    html += next("ai-brand", "브랜드 한 줄 · 포지셔닝 & 슬로건", { cls: "ai", txt: "AI" });
+    html += next("ai-actions", "점수를 올리는 우선순위 액션", { cls: "ai", txt: "AI" });
+    html += next("ai-roadmap", "90일 브랜딩 로드맵", { cls: "ai", txt: "AI" });
+    html += next("ai-pillars", "콘텐츠 기둥 · 이 채널이 소유할 축", { cls: "ai", txt: "AI" });
+    html += next("ai-topics", "주제 태그", { cls: "ai", txt: "AI" });
+    html += next("ai-review", "지금까지 콘텐츠 리뷰 · 브랜드 관점", { cls: "ai", txt: "AI" });
+    html += next("ai-resonance", "공명 분석 · 어떤 영상이 마음에 가 닿았나", { cls: "ai", txt: "AI" });
+    html += next("ai-about", "채널 소개글 리라이트 제안", { cls: "ai", txt: "AI" });
+    html += next("ai-next", "다음 영상 제안 · 서사를 확장하는 방향", { cls: "ai", txt: "AI" });
+    html += next("ai-monetize", "수익화 컨설팅 · 이 채널에 맞는 방법", { cls: "ai", txt: "AI 컨설팅" });
+    html += next("video",
       "영상 데이터 전수 분석 <span class=\"count-badge\">" + u.fmtInt(sig.fetchedCount) + "개</span>",
-      { cls: "ctx", txt: sig.truncated ? "부분 수집" : "전수 수집" });
-    // 13 총평
-    html += sec("13", "ai-summary", "종합 총평", { cls: "ai", txt: "AI" });
+      { cls: "ctx", txt: sig.truncated ? "부분 수집" : "전수 수집" }, false);
+    html += next("ai-summary", "종합 총평", { cls: "ai", txt: "AI" });
+
+    currentAiIds = aiIds;
 
     $("results").innerHTML = html;
     u.show($("results"));
@@ -165,8 +171,7 @@ PhilApp.ui = (function () {
     // AI 로딩 (실제 선택된 모델명을 그대로 표시)
     var loading = '<div class="card"><div class="ai-loading"><div class="spinner"></div>' + esc(P.storage.apiModel()) + ' 가 전체 ' +
       u.fmtInt(sig.fetchedCount) + '개 영상 데이터를 바탕으로 브랜드 서사를 정량 분석하고 있습니다...</div></div>';
-    ["ai-score","ai-core","ai-brand","ai-actions","ai-roadmap","ai-pillars","ai-topics","ai-review","ai-resonance","ai-about","ai-next","ai-summary"]
-      .forEach(function (id) { $(id + "-body").innerHTML = loading; });
+    aiIds.forEach(function (id) { $(id + "-body").innerHTML = loading; });
   }
 
   function metric(v, k) {
@@ -272,7 +277,7 @@ PhilApp.ui = (function () {
     // fullHistory: PhilApp.history.getHistory(channelId) 호출 결과(최신순, 방금 저장된 현재 기록이 [0])
     var previous = (fullHistory && fullHistory.length > 1) ? fullHistory[1] : null;
 
-    // 01 스코어카드
+    // 스코어카드
     var sc = r.scorecard || {};
     var dims = sc.dimensions || [];
     var scHtml = '<div class="card score-card">';
@@ -296,7 +301,7 @@ PhilApp.ui = (function () {
     var vbtn = $("btn-verify");
     if (vbtn) vbtn.addEventListener("click", runVerification);
 
-    // 02 핵심 메시지 (근거 검증 포함)
+    // 핵심 메시지 (근거 검증 포함)
     var cm = r.coreMessage || {};
     $("ai-core-body").innerHTML = '<div class="card prose">' +
       (cm.confidence ? levelBadge(cm.confidence, "메시지 선명도") : "") +
@@ -304,7 +309,19 @@ PhilApp.ui = (function () {
       (cm.evidence && cm.evidence.length ? '<div class="evi"><span class="evi-t">근거 (실제 영상과 자동 대조)</span>' + evidenceList(cm.evidence) + '</div>' : "") +
       '</div>';
 
-    // 03 포지셔닝 + 슬로건
+    // 방향성 상담 (초기 단계 채널일 때만 섹션 자체가 존재)
+    if ($("ai-direction-body")) {
+      var dc = r.directionConsulting || {};
+      $("ai-direction-body").innerHTML = '<div class="card prose">' +
+        (dc.stageNote ? '<p class="lead">' + escML(dc.stageNote) + '</p>' : '<p class="prose">아직 데이터가 적어 방향성을 함께 탐색해 보아요.</p>') +
+        (dc.whyHypothesis ? '<div class="evi"><span class="evi-t">🧭 방향성 가설</span><p>' + escML(dc.whyHypothesis) + '</p></div>' : '') +
+        (dc.experimentsToTry && dc.experimentsToTry.length ?
+          '<div class="evi"><span class="evi-t">시도해볼 실험</span>' + bullets(dc.experimentsToTry) + '</div>' : '') +
+        (dc.whatToWatchNext ? '<div class="dim-improve"><span class="lbl">👀 다음에 확인할 것</span> ' + esc(dc.whatToWatchNext) + '</div>' : '') +
+        '</div>';
+    }
+
+    // 포지셔닝 + 슬로건
     var tags = r.brandTaglines || [];
     $("ai-brand-body").innerHTML = '<div class="card">' +
       (r.positioningStatement ? '<div class="positioning"><span class="evi-t">포지셔닝 한 문장</span><p class="lead">' + escML(r.positioningStatement) + '</p></div>' : "") +
@@ -312,7 +329,7 @@ PhilApp.ui = (function () {
         tags.map(function (t) { return '<div class="tagline">“' + esc(t) + '”</div>'; }).join("") + '</div>' : "") +
       '</div>';
 
-    // 04 우선순위 액션
+    // 우선순위 액션
     var pa = r.priorityActions || [];
     $("ai-actions-body").innerHTML = '<div class="card">' +
       (pa.length ? pa.map(function (a) {
@@ -325,7 +342,7 @@ PhilApp.ui = (function () {
           '</div></div>';
       }).join("") : '<span class="prose">액션을 생성하지 못했습니다.</span>') + '</div>';
 
-    // 05 로드맵
+    // 로드맵
     var rm = r.roadmap || [];
     $("ai-roadmap-body").innerHTML = '<div class="card"><div class="timeline">' +
       (rm.length ? rm.map(function (p, i) {
@@ -335,7 +352,7 @@ PhilApp.ui = (function () {
           bullets(p.actions, "phase-actions") + '</div></div>';
       }).join("") : '<span class="prose">로드맵을 생성하지 못했습니다.</span>') + '</div></div>';
 
-    // 06 콘텐츠 기둥
+    // 콘텐츠 기둥
     var cp = r.contentPillars || [];
     $("ai-pillars-body").innerHTML =
       (cp.length ? '<div class="pillars">' + cp.map(function (p) {
@@ -344,11 +361,11 @@ PhilApp.ui = (function () {
           (p.example ? '<div class="pillar-ex">예: ' + esc(p.example) + '</div>' : '') + '</div>';
       }).join("") + '</div>' : '<div class="card prose">콘텐츠 기둥을 생성하지 못했습니다.</div>');
 
-    // 07 주제 태그
+    // 주제 태그
     $("ai-topics-body").innerHTML = '<div class="card">' +
       (r.topics && r.topics.length ? chips(r.topics) : '<span class="prose">주제를 추출하지 못했습니다.</span>') + '</div>';
 
-    // 08 콘텐츠 리뷰
+    // 콘텐츠 리뷰
     var cr = r.contentReview || [];
     $("ai-review-body").innerHTML = '<div class="card">' +
       (cr.length ? cr.map(function (x) {
@@ -358,11 +375,11 @@ PhilApp.ui = (function () {
           '<div class="review-note">' + esc(x.note || "") + '</div></div>';
       }).join("") : '<span class="prose">리뷰를 생성하지 못했습니다.</span>') + '</div>';
 
-    // 09 공명 분석
+    // 공명 분석
     $("ai-resonance-body").innerHTML = '<div class="card prose"><p>' +
       escML(r.resonanceInsight || "공명 분석을 생성하지 못했습니다.") + '</p></div>';
 
-    // 10 소개글 리라이트
+    // 소개글 리라이트
     var ab = r.aboutRewrite || {};
     $("ai-about-body").innerHTML = '<div class="card"><div class="rewrite">' +
       '<div class="rw-col before"><span class="rw-label">현재</span><p>' + escML(ab.current || "소개글 없음") + '</p></div>' +
@@ -370,7 +387,7 @@ PhilApp.ui = (function () {
       '<div class="rw-col after"><span class="rw-label">제안</span><p>' + escML(ab.suggested || "제안을 생성하지 못했습니다.") + '</p></div>' +
       '</div></div>';
 
-    // 11 다음 영상
+    // 다음 영상
     var nv = r.nextVideos || [];
     $("ai-next-body").innerHTML = '<div class="card">' +
       (nv.length ? nv.map(function (v) {
@@ -380,7 +397,20 @@ PhilApp.ui = (function () {
           '</div>';
       }).join("") : '<div class="prose">제안을 생성하지 못했습니다.</div>') + '</div>';
 
-    // 13 총평
+    // 수익화 컨설팅
+    var ma = r.monetizationAdvice || [];
+    $("ai-monetize-body").innerHTML = '<div class="card">' +
+      (ma.length ? ma.map(function (m) {
+        return '<div class="review-row"><div class="review-head">' +
+          levelBadge(m.fit, "적합도") +
+          '<span class="review-pat">💰 ' + esc(m.method || "") + '</span></div>' +
+          (m.why ? '<div class="review-note">' + esc(m.why) + '</div>' : '') +
+          (m.howToStart ? '<div class="action-how" style="margin-top:6px;"><span class="lbl">시작 방법</span> ' + esc(m.howToStart) + '</div>' : '') +
+          (m.risk ? '<div class="action-why" style="color:#ff9a97;"><span class="lbl">주의</span> ' + esc(m.risk) + '</div>' : '') +
+          '</div>';
+      }).join("") : '<span class="prose">수익화 제안을 생성하지 못했습니다.</span>') + '</div>';
+
+    // 총평
     $("ai-summary-body").innerHTML = '<div class="card prose summary-card"><p>' +
       escML(r.summary || "총평을 생성하지 못했습니다.") + '</p>' +
       (modelUsed ? '<div class="model-tag">분석 모델: ' + esc(modelUsed) + '</div>' : "") + '</div>';
@@ -530,6 +560,12 @@ PhilApp.ui = (function () {
     });
     L.push("");
     if (r.coreMessage) { L.push("## 핵심 메시지"); L.push(r.coreMessage.inferredWhy || ""); L.push(""); }
+    if (r.directionConsulting) {
+      L.push("## 방향성 상담 (초기 단계)");
+      if (r.directionConsulting.whyHypothesis) L.push(r.directionConsulting.whyHypothesis);
+      (r.directionConsulting.experimentsToTry || []).forEach(function (x) { L.push("- " + x); });
+      L.push("");
+    }
     if (r.positioningStatement) { L.push("## 포지셔닝"); L.push(r.positioningStatement); L.push(""); }
     if (r.brandTaglines && r.brandTaglines.length) { L.push("## 슬로건 후보"); r.brandTaglines.forEach(function (t) { L.push("- " + t); }); L.push(""); }
     if (r.priorityActions && r.priorityActions.length) {
@@ -542,6 +578,15 @@ PhilApp.ui = (function () {
       r.roadmap.forEach(function (p) {
         L.push("### " + (p.phase || "") + " — " + (p.focus || ""));
         (p.actions || []).forEach(function (x) { L.push("- " + x); });
+      });
+      L.push("");
+    }
+    if (r.monetizationAdvice && r.monetizationAdvice.length) {
+      L.push("## 수익화 컨설팅");
+      r.monetizationAdvice.forEach(function (m) {
+        L.push("- **" + (m.method || "") + "** [" + (m.fit || "") + "] — " + (m.why || ""));
+        if (m.howToStart) L.push("  - 시작: " + m.howToStart);
+        if (m.risk) L.push("  - 주의: " + m.risk);
       });
       L.push("");
     }
@@ -566,8 +611,7 @@ PhilApp.ui = (function () {
 
   function aiError(msg) {
     var html = '<div class="card"><div class="banner error">' + esc(msg) + '</div></div>';
-    ["ai-score","ai-core","ai-brand","ai-actions","ai-roadmap","ai-pillars","ai-topics","ai-review","ai-resonance","ai-about","ai-next","ai-summary"]
-      .forEach(function (id) { if ($(id + "-body")) $(id + "-body").innerHTML = html; });
+    currentAiIds.forEach(function (id) { if ($(id + "-body")) $(id + "-body").innerHTML = html; });
   }
 
   /* =====================================================================

@@ -143,6 +143,7 @@ transcriptBlock(videos) +
 
   function build(channel, videos, sig, history) {
     var hasHistory = !!(history && history.length);
+    var isEarlyStage = videos.length <= (PhilApp.config.LOW_VIDEO_THRESHOLD || 5);
     var header =
 "당신은 유튜브 채널의 '브랜드 서사(Brand Narrative) 전략가'" + (hasHistory ? "이자, 이 채널을 꾸준히 지켜봐 온 담당 컨설턴트" : "") + "입니다.\n" +
 "당신의 임무는 성장 해킹이 아니라, 한 창작자의 '진짜 이야기'를 발견하고 그것이 자라도록 돕는 것입니다.\n" +
@@ -153,6 +154,18 @@ transcriptBlock(videos) +
 "  더 나빠졌는지 짚으세요. 단순 반복이 아니라 '지속 상담'으로서 진전을 평가하세요.\n" +
 "- scorecard.dimensions 의 점수를 지난 기록과 비교해 냉정하게 매기세요. 근거 없이 점수를\n" +
 "  올리거나 내리지 말고, 실제 데이터(제목/통계) 변화가 있을 때만 점수를 움직이세요.\n\n"
+: "") +
+(isEarlyStage ?
+"■ 이 채널은 영상이 " + videos.length + "개뿐인 '초기 단계' 채널입니다 — 매우 중요한 태도 전환\n" +
+"- 영상이 적어 '지금까지 어떤 패턴이 있었는지'를 단정할 근거가 부족합니다. 소수 영상에서 억지로\n" +
+"  패턴을 만들어내지 마세요(contentReview, resonanceInsight 등에서 과잉 일반화 금지).\n" +
+"- 대신 '지금까지 무엇을 했는가'보다 '앞으로 어떤 방향으로 나아가야 하는가'에 무게를 실으세요.\n" +
+"  아래 스키마의 directionConsulting 필드를 반드시 실질적으로 채우세요.\n" +
+"- coreMessage.confidence 는 솔직하게 '보통' 또는 '낮음'으로, 소개글과 몇 안 되는 영상에서\n" +
+"  탐색적으로 추론한 '가설'이라는 점을 inferredWhy 문장에 자연스럽게 드러내세요.\n" +
+"- scorecard.dimensions 중 '서사 축적력'은 데이터가 없어 냉정히 낮게 매기되(축적을 판단할 근거\n" +
+"  자체가 없다는 게 이유), diagnosis 에는 비판이 아니라 '아직 판단하기 이른 단계'라고 설명하세요.\n" +
+"- priorityActions·roadmap 은 '무엇을 고쳐라'가 아니라 '무엇을 처음 시도해보라'는 톤으로 쓰세요.\n\n"
 : "") +
 "■ 반드시 지켜야 할 분석 원칙 (이것이 이 분석의 전부입니다)\n" +
 "1. 이 창작자가 '왜(Why)' 이 채널을 시작했는지 — 어떤 문제의식, 사명, 하고 싶은 말이 있었는지 —\n" +
@@ -184,6 +197,14 @@ transcriptBlock(videos) +
 "  나열하지 마세요. 그것은 이 분석의 목적이 아닙니다.\n" +
 "- 근거 없는 칭찬이나 막연한 덕담을 하지 마세요. 반드시 실제 데이터(제목/설명/참여 패턴)를 인용하세요.\n" +
 "\n" +
+"■ 수익화 컨설팅 지침 (monetizationAdvice)\n" +
+"- 광고 수익·브랜드 협찬·멤버십/슈퍼챗·디지털 상품(전자책, 템플릿 등)·강의/컨설팅·제휴 마케팅 등\n" +
+"  구체적 방법 중, 이 채널의 메시지(Why)·니치·오디언스에 실제로 맞는 것만 골라 제안하세요.\n" +
+"- 채널의 진정성/서사를 해칠 수 있는 수익화 방법(예: 메시지와 무관한 협찬 남발)은 risk 필드에\n" +
+"  명시하고, fit 을 낮게 매기세요. 돈이 된다고 다 추천하지 마세요.\n" +
+"- 지금 구독자·조회수 규모에서 비현실적인 방법(예: 팔로워 100명인데 대형 브랜드 협찬)은 제안하지\n" +
+"  말고, 지금 단계에서 실제로 시작 가능한 것 위주로 제안하세요.\n" +
+"\n" +
 "■ 태도\n" +
 "- 창작자를 존중하되, 도움이 되도록 솔직하게. 서사가 약하면 약하다고, 왜 그런지 근거와 함께.\n" +
 "- 모든 답변은 자연스러운 한국어로, 실행 가능한 조언 위주로 작성하세요.\n";
@@ -201,6 +222,14 @@ transcriptBlock(videos) +
 '    "confidence": "높음" | "보통" | "낮음",\n' +
 '    "evidence": ["근거가 된 실제 영상 제목 2~4개 (제공된 목록의 제목을 그대로 인용)"]\n' +
 "  },\n" +
+(isEarlyStage ?
+'  "directionConsulting": {   // 영상이 적은 초기 단계라 특별히 채우는 방향성 탐색 상담\n' +
+'    "stageNote": "지금이 어떤 단계인지, 왜 패턴 단정 대신 방향 탐색이 필요한지 1~2문장",\n' +
+'    "whyHypothesis": "소개글과 소수 영상에서 탐색적으로 추론한 이 채널의 방향성 가설 2~3문장 (가설임을 명시)",\n' +
+'    "experimentsToTry": ["이 단계에서 시도해볼 구체적 콘텐츠 실험/방향 3~4개 — 무엇을 왜 시도하는지"],\n' +
+'    "whatToWatchNext": "다음 몇 개 영상을 만들며 무엇을 관찰하면 방향이 좁혀질지 1~2문장"\n' +
+"  },\n"
+: "") +
 '  "scorecard": {\n' +
 '    "overall": 0~100 사이 정수,\n' +
 '    "grade": "A" | "B" | "C" | "D",\n' +
@@ -238,6 +267,12 @@ transcriptBlock(videos) +
 '  "nextVideos": [   // 다음에 만들면 좋을 영상 4~5개 (서사를 확장하는 방향, 조회수 노림수 아님)\n' +
 '    { "title": "구체적 영상 제목 후보", "reason": "이 채널의 메시지·서사에 맞는 이유", "howItBuildsNarrative": "채널 서사를 어떻게 한 걸음 더 쌓는지 1~2문장" }\n' +
 "  ],\n" +
+'  "monetizationAdvice": [   // 이 채널의 메시지·니치·오디언스·현재 규모에 맞는 수익화 방법 3~5개\n' +
+'    { "method": "구체적 수익화 방법(예: 브랜드 협찬, 멤버십, 디지털 상품, 강의/컨설팅, 제휴 마케팅 등)",\n' +
+'      "fit": "높음"|"보통"|"낮음", "why": "왜 이 채널에 맞는지(또는 안 맞는지) 데이터·니치 근거",\n' +
+'      "howToStart": "지금 단계에서 구체적으로 어떻게 시작할지 1~2문장",\n' +
+'      "risk": "이 방법이 브랜드 서사·진정성을 해칠 수 있는 지점 (없으면 빈 문자열)" }\n' +
+"  ],\n" +
 '  "summary": "이 채널의 서사적 정체성과 나아갈 방향을 따뜻하지만 솔직하게 정리한 3~5문장 총평"' + (hasHistory ? ",\n" : "\n") +
 (hasHistory ?
 '  "trendNote": "지난 상담(들) 대비 이번엔 무엇이 나아졌는지/그대로인지/후퇴했는지 데이터 근거와 함께 2~4문장. 반드시 구체적 변화(점수, 업로드 패턴, 새 시도 등)를 언급"\n'
@@ -262,6 +297,12 @@ transcriptBlock(videos) +
         (sc.dimensions || []).forEach(function (d) { lines.push("- " + d.key + ": " + d.score + "점 — " + (d.diagnosis || "")); });
         if (lastResult.coreMessage) lines.push("핵심 메시지(Why): " + lastResult.coreMessage.inferredWhy);
         if (lastResult.positioningStatement) lines.push("포지셔닝: " + lastResult.positioningStatement);
+        if (lastResult.directionConsulting) {
+          lines.push("방향성 상담(초기 단계 채널): " + lastResult.directionConsulting.whyHypothesis);
+        }
+        if (lastResult.monetizationAdvice && lastResult.monetizationAdvice.length) {
+          lines.push("제안했던 수익화 방법: " + lastResult.monetizationAdvice.map(function (m) { return m.method; }).join(", "));
+        }
         if (lastResult.summary) lines.push("총평: " + lastResult.summary);
         resultDigest = "\n[가장 최근 분석 결과 요약 — 후속 답변은 이 결과와 모순되지 않아야 합니다]\n" + lines.join("\n") + "\n";
       } catch (e) {}
@@ -280,7 +321,11 @@ transcriptBlock(videos) +
 "4. 자극적 주제나 일반적인 유튜브 성장 팁(썸네일, SEO, 업로드 시간 등)을 권하지 마세요.\n" +
 "5. 한국어로, 간결하고 실용적으로(보통 2~6문장, 목록이 필요하면 짧은 목록) 답하세요.\n" +
 "6. 마크다운 헤더나 코드펜스 없이 자연스러운 대화체 텍스트로만 답하세요.\n" +
-(isOngoing ? "7. 이 채널을 여러 번 상담해왔다는 사실을 자연스럽게 활용하세요(예: '지난번에 말씀드린 ~은 어떻게 되셨나요').\n" : "") +
+"7. 채널 방향성·Why를 더 명확히 하는 상담, 수익화 방법 상담은 이 앱의 정식 상담 범위입니다.\n" +
+"   사용자가 물어보면 채널의 메시지·니치·규모에 맞게 적극적으로 조언하세요(4번의 '성장 팁 금지'는\n" +
+"   썸네일/SEO 같은 얕은 트릭에 대한 것이지, 방향성이나 수익화 상담을 피하라는 뜻이 아닙니다).\n" +
+"8. 영상이 매우 적은 초기 채널이라면, 데이터로 단정하기보다 가설과 다음 실험을 제안하는 톤을 쓰세요.\n" +
+(isOngoing ? "9. 이 채널을 여러 번 상담해왔다는 사실을 자연스럽게 활용하세요(예: '지난번에 말씀드린 ~은 어떻게 되셨나요').\n" : "") +
 resultDigest +
 buildHistoryDigest(history) +
 buildDataContext(channel, videos, sig, 30);
