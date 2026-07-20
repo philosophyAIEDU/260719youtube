@@ -65,17 +65,18 @@ PhilApp.config = {
 
   // 기본 모델. 설정 화면에서 사용자가 아래 GEMINI_MODEL_OPTIONS 중 고르면
   // storage.apiModel() 이 그 선택을 우선 사용하고, 고르지 않았다면 이 값을 씁니다.
-  GEMINI_MODEL: "gemini-3.1-flash-lite",
+  GEMINI_MODEL: "gemini-3.5-flash",
 
   // 설정 화면의 '분석 모델' 드롭다운에 표시되는 선택지.
   GEMINI_MODEL_OPTIONS: [
-    { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash Lite — 기본, 빠르고 저렴" },
-    { id: "gemini-3.5-flash", label: "Gemini 3.5 Flash — 더 강력, 속도/비용 특성 다름" }
+    { id: "gemini-3.5-flash", label: "Gemini 3.5 Flash — 기본, 강력함" },
+    { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash Lite — 더 빠르고 저렴" }
   ],
 
   // 선택된(또는 기본) 모델이 404 일 때에만 순서대로 자동 대체하는 안전망.
   // (정상 상황에서는 선택한 모델이 그대로 쓰이고, 실제 사용된 모델은 결과 화면 하단에 표시됩니다)
   GEMINI_FALLBACKS: [
+    "gemini-3.1-flash-lite",
     "gemini-3.1-flash-lite-latest",
     "gemini-flash-lite-latest",
     "gemini-2.5-flash-lite",

@@ -146,8 +146,8 @@ PhilApp.ui = (function () {
     $("btn-print").addEventListener("click", function () { window.print(); });
     $("btn-copy-report").addEventListener("click", copyReport);
 
-    // AI 로딩
-    var loading = '<div class="card"><div class="ai-loading"><div class="spinner"></div>Gemini 3.1 Flash Lite 가 전체 ' +
+    // AI 로딩 (실제 선택된 모델명을 그대로 표시)
+    var loading = '<div class="card"><div class="ai-loading"><div class="spinner"></div>' + esc(P.storage.apiModel()) + ' 가 전체 ' +
       u.fmtInt(sig.fetchedCount) + '개 영상 데이터를 바탕으로 브랜드 서사를 정량 분석하고 있습니다...</div></div>';
     ["ai-score","ai-core","ai-brand","ai-actions","ai-roadmap","ai-pillars","ai-topics","ai-review","ai-resonance","ai-about","ai-next","ai-summary"]
       .forEach(function (id) { $(id + "-body").innerHTML = loading; });
