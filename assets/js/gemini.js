@@ -79,11 +79,18 @@ PhilApp.gemini = (function () {
     return attempt(0);
   }
 
+  // 'thinking' 지원 모델은 최종 답변과 별개로 내부 추론을 parts[].thought=true 로 반환할 수
+  // 있습니다. 그걸 답변 텍스트와 합치면 JSON 앞뒤에 잡텍스트가 붙어 파싱이 깨지므로 제외합니다.
   function extractText(data) {
     try {
       var parts = data.candidates[0].content.parts;
-      return parts.map(function (p) { return p.text || ""; }).join("");
+      return parts.filter(function (p) { return !p.thought; })
+        .map(function (p) { return p.text || ""; }).join("");
     } catch (e) { return ""; }
+  }
+
+  function extractFinishReason(data) {
+    try { return data.candidates[0].finishReason || ""; } catch (e) { return ""; }
   }
 
   function parseJSON(text) {
@@ -98,13 +105,28 @@ PhilApp.gemini = (function () {
   }
 
   // 프롬프트 → 파싱된 분석 객체 (JSON 스키마 강제)
-  function analyze(promptText) {
+  // 응답이 토큰 한도에 걸려 잘린 경우, 한 번에 한해 더 큰 한도로 자동 재시도합니다.
+  function analyze(promptText, _retry) {
+    var genConfig = cfg.GEMINI_GENERATION;
+    if (_retry) {
+      genConfig = Object.assign({}, cfg.GEMINI_GENERATION, {
+        maxOutputTokens: Math.min((cfg.GEMINI_GENERATION.maxOutputTokens || 8192) * 2, 32768)
+      });
+    }
     return generateRaw(
       [{ role: "user", parts: [{ text: promptText }] }],
-      cfg.GEMINI_GENERATION
+      genConfig
     ).then(function (res) {
-      var parsed = parseJSON(extractText(res.data));
-      if (!parsed) throw new Error("AI 분석 결과(JSON)를 해석하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      var text = extractText(res.data);
+      var parsed = parseJSON(text);
+      if (!parsed) {
+        var reason = extractFinishReason(res.data);
+        if (reason === "MAX_TOKENS" && !_retry) {
+          return analyze(promptText, true);   // 응답이 잘렸을 가능성 — 더 큰 토큰 한도로 1회 재시도
+        }
+        var hint = reason ? " (사유: " + reason + ")" : "";
+        throw new Error("AI 분석 결과(JSON)를 해석하지 못했습니다" + hint + ". 잠시 후 다시 시도해 주세요.");
+      }
       return { result: parsed, model: res.model };
     });
   }

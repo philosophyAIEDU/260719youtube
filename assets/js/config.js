@@ -84,10 +84,13 @@ PhilApp.config = {
   ],
 
   // Gemini 생성 파라미터 (JSON 분석 모드)
+  // maxOutputTokens 는 넉넉하게: 13개 섹션짜리 스키마 + 한국어(토큰 소모가 큼) +
+  // 일부 모델의 내부 추론(thinking) 토큰까지 고려. 그래도 잘리면 gemini.js 가
+  // 자동으로 더 큰 한도로 1회 재시도합니다.
   GEMINI_GENERATION: {
     temperature: 0.65,       // 분석의 일관성을 위해 다소 낮게
     topP: 0.95,
-    maxOutputTokens: 8192,
+    maxOutputTokens: 16384,
     responseMimeType: "application/json"
   },
 
