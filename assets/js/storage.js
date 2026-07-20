@@ -48,11 +48,17 @@ PhilApp.storage = (function () {
   function setOAuth(clientId) { localStorage.setItem(cfg.LS_OAUTH, (clientId || "").trim()); }
   function hasOAuth() { return !!apiOAuth(); }
 
+  // ---- 분석 모델 선택 (설정 화면 드롭다운) ----
+  function getModel() { return (localStorage.getItem(cfg.LS_MODEL) || "").trim(); }
+  function setModel(modelId) { localStorage.setItem(cfg.LS_MODEL, (modelId || "").trim()); }
+  function apiModel() { return getModel() || cfg.GEMINI_MODEL; }
+
   return {
     getYT: getYT, getGM: getGM,
     apiYT: apiYT, apiGM: apiGM,
     builtinYT: builtinYT, builtinGM: builtinGM,
     setKeys: setKeys, hasKeys: hasKeys, usingBuiltin: usingBuiltin, clear: clear,
-    getOAuth: getOAuth, apiOAuth: apiOAuth, setOAuth: setOAuth, hasOAuth: hasOAuth
+    getOAuth: getOAuth, apiOAuth: apiOAuth, setOAuth: setOAuth, hasOAuth: hasOAuth,
+    getModel: getModel, setModel: setModel, apiModel: apiModel
   };
 })();

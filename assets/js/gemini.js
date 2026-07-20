@@ -1,7 +1,8 @@
 /* =====================================================================
  * gemini.js — Google Generative Language API 클라이언트
- *   기본 모델: gemini-3.1-flash-lite (필수)
- *   해당 모델이 404 일 때에만 동일 계열 Flash-Lite 후보로 자동 대체.
+ *   기본 모델: gemini-3.1-flash-lite. 설정 화면에서 사용자가 다른 모델
+ *   (예: gemini-3.5-flash)을 고르면 storage.apiModel() 이 그 값을 우선
+ *   사용합니다. 선택된 모델이 404 일 때에만 동일 계열 후보로 자동 대체.
  *
  *   analyze() : JSON 스키마 강제 분석 모드 (스코어카드/재검증 등)
  *   chat()    : 자유 대화 모드 (후속 질문 채팅용, 일반 텍스트 응답)
@@ -42,12 +43,15 @@ PhilApp.gemini = (function () {
     if (systemText) payload.systemInstruction = { parts: [{ text: systemText }] };
     var body = JSON.stringify(payload);
 
-    var candidates = [cfg.GEMINI_MODEL].concat(cfg.GEMINI_FALLBACKS);
+    var primaryModel = storage.apiModel();
+    var candidates = [primaryModel].concat(cfg.GEMINI_FALLBACKS).filter(function (m, i, arr) {
+      return m && arr.indexOf(m) === i;   // 중복 제거 (선택 모델이 fallback 목록에도 있을 경우 대비)
+    });
 
     function attempt(i) {
       if (i >= candidates.length) {
         return Promise.reject(new Error(
-          "필수 모델 '" + cfg.GEMINI_MODEL + "' 및 대체 모델을 사용할 수 없습니다. " +
+          "선택한 모델 '" + primaryModel + "' 및 대체 모델을 사용할 수 없습니다. " +
           "Gemini API 키 권한 또는 모델 접근 가능 여부를 확인해 주세요."));
       }
       var model = candidates[i];

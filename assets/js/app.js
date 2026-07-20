@@ -10,6 +10,19 @@
   var storage = P.storage, yt = P.youtube, ui = P.ui;
 
   /* ---------- 설정 화면 ---------- */
+  function populateModelSelect() {
+    var sel = $("model-select");
+    if (!sel || sel.options.length) return;   // 이미 채워져 있으면 재구성하지 않음
+    var current = storage.apiModel();
+    (P.config.GEMINI_MODEL_OPTIONS || []).forEach(function (opt) {
+      var o = document.createElement("option");
+      o.value = opt.id;
+      o.textContent = opt.label;
+      if (opt.id === current) o.selected = true;
+      sel.appendChild(o);
+    });
+  }
+
   function openSettings() {
     $("yt-key").value = storage.getYT();
     $("gm-key").value = storage.getGM();
@@ -24,6 +37,8 @@
         u.hide(note);
       }
     }
+    populateModelSelect();
+    if ($("model-select")) $("model-select").value = storage.apiModel();
     u.show($("view-settings"));
     u.hide($("view-main"));
     window.scrollTo(0, 0);
@@ -37,6 +52,7 @@
   $("btn-close-settings").addEventListener("click", closeSettings);
   $("btn-save-keys").addEventListener("click", function () {
     storage.setKeys($("yt-key").value, $("gm-key").value);
+    if ($("model-select")) storage.setModel($("model-select").value);
     closeSettings();
     ui.banner("API 키가 이 브라우저에 저장되었습니다. 채널 주소를 입력하고 분석해 보세요.", "info");
   });
@@ -87,6 +103,37 @@
       setTimeout(function () { u.hide($("oauth-setup")); }, 1400);
     });
   }
+
+  // OAuth 설정 안내: "승인된 자바스크립트 원본"에 등록해야 할 현재 사이트 주소 표시
+  (function initOauthOriginHint() {
+    var originEl = $("oauth-origin-value");
+    if (!originEl) return;
+    var origin = window.location.origin;
+    var isFileProtocol = !origin || origin === "null" || window.location.protocol === "file:";
+    originEl.textContent = isFileProtocol ? "(로컬 서버로 열어야 주소가 표시됩니다)" : origin;
+    if (isFileProtocol) u.show($("oauth-origin-warning"));
+
+    var copyBtn = $("btn-copy-origin");
+    if (copyBtn) {
+      copyBtn.addEventListener("click", function () {
+        if (isFileProtocol) return;
+        var done = function () {
+          var t = copyBtn.textContent;
+          copyBtn.textContent = "✓ 복사됨";
+          setTimeout(function () { copyBtn.textContent = t; }, 1400);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(origin).then(done, function () {});
+        } else {
+          var ta = document.createElement("textarea");
+          ta.value = origin; ta.style.position = "fixed"; ta.style.opacity = "0";
+          document.body.appendChild(ta); ta.select();
+          try { document.execCommand("copy"); done(); } catch (e) {}
+          document.body.removeChild(ta);
+        }
+      });
+    }
+  })();
 
   // 자막(체크박스 켜짐) 요청 시: 로그인 → 본인 채널 확인 → 대표 샘플 자막 수집.
   // 실패해도 절대 메인 흐름을 막지 않고, 안내 문구(note)만 반환합니다.

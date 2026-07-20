@@ -104,11 +104,12 @@ header.topbar {
 .field { margin-bottom: 16px; }
 .field label { display: block; font-weight: 650; margin-bottom: 7px; font-size: .88rem; }
 .field .inline { display: flex; gap: 8px; }
-.field input {
+.field input, .field select {
   width: 100%; padding: 13px 15px; border-radius: 12px; border: 1px solid var(--border);
-  background: var(--panel); color: var(--text); font-size: .95rem;
+  background: var(--panel); color: var(--text); font-size: .95rem; font-family: inherit;
 }
-.field input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.field select { cursor: pointer; }
+.field input:focus, .field select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .hint { font-size: .8rem; color: var(--muted); margin-top: 7px; }
 
 .transcript-toggle {
@@ -127,8 +128,29 @@ header.topbar {
   margin-top: 12px; padding: 14px 16px;
   background: var(--accent-soft); border: 1px solid rgba(245,177,61,.3); border-radius: 12px;
 }
-.oauth-setup-title { font-weight: 750; font-size: .88rem; margin-bottom: 6px; }
+.oauth-setup-title { font-weight: 750; font-size: .88rem; margin-bottom: 8px; }
 .oauth-setup-desc { margin: 0 0 12px; font-size: .8rem; color: var(--text-2); line-height: 1.6; }
+
+.oauth-steps { margin: 0 0 14px; padding-left: 20px; font-size: .82rem; color: var(--text-2); line-height: 1.7; }
+.oauth-steps li { margin-bottom: 9px; }
+.oauth-steps li:last-child { margin-bottom: 0; }
+.oauth-steps a { color: var(--teal); }
+.oauth-steps code {
+  background: rgba(255,255,255,.08); padding: 1px 6px; border-radius: 6px; font-size: .92em;
+}
+.oauth-origin {
+  display: flex; align-items: center; gap: 8px; margin-top: 7px;
+  padding: 8px 10px; background: var(--panel); border: 1px solid var(--border-soft); border-radius: 9px;
+}
+.oauth-origin code {
+  flex: 1; background: none; padding: 0; font-size: .84rem; color: var(--accent);
+  word-break: break-all; font-weight: 650;
+}
+.oauth-origin-warning {
+  margin-top: 8px; font-size: .78rem; color: #ff9a97;
+  background: rgba(242,99,95,.1); border: 1px solid rgba(242,99,95,.3); border-radius: 9px; padding: 8px 10px;
+}
+
 .oauth-setup-row { display: flex; gap: 8px; }
 .oauth-setup-row input {
   flex: 1; padding: 10px 13px; border-radius: 10px; border: 1px solid var(--border);

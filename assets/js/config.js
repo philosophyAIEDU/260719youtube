@@ -63,15 +63,24 @@ PhilApp.config = {
   YT_API_BASE: "https://www.googleapis.com/youtube/v3/",
   GEMINI_API_BASE: "https://generativelanguage.googleapis.com/v1beta/models/",
 
-  // ⭐ 반드시 Gemini 3.1 Flash Lite 를 사용합니다. (사용자 요구사항)
+  // 기본 모델. 설정 화면에서 사용자가 아래 GEMINI_MODEL_OPTIONS 중 고르면
+  // storage.apiModel() 이 그 선택을 우선 사용하고, 고르지 않았다면 이 값을 씁니다.
   GEMINI_MODEL: "gemini-3.1-flash-lite",
 
-  // 위 모델 ID 가 아직 API 에 노출되지 않아 404 가 날 때에만 자동 대체하는 안전망.
-  // (동일 계열 Flash-Lite 만 후보로 둡니다. 정상 상황에서는 위 모델이 그대로 쓰입니다.)
+  // 설정 화면의 '분석 모델' 드롭다운에 표시되는 선택지.
+  GEMINI_MODEL_OPTIONS: [
+    { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash Lite — 기본, 빠르고 저렴" },
+    { id: "gemini-3.5-flash", label: "Gemini 3.5 Flash — 더 강력, 속도/비용 특성 다름" }
+  ],
+
+  // 선택된(또는 기본) 모델이 404 일 때에만 순서대로 자동 대체하는 안전망.
+  // (정상 상황에서는 선택한 모델이 그대로 쓰이고, 실제 사용된 모델은 결과 화면 하단에 표시됩니다)
   GEMINI_FALLBACKS: [
     "gemini-3.1-flash-lite-latest",
     "gemini-flash-lite-latest",
-    "gemini-2.5-flash-lite"
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-flash",
+    "gemini-2.0-flash"
   ],
 
   // Gemini 생성 파라미터 (JSON 분석 모드)
@@ -107,5 +116,6 @@ PhilApp.config = {
 
   LS_YT: "phil_yt_api_key",  // localStorage 키
   LS_GM: "phil_gm_api_key",
-  LS_OAUTH: "phil_oauth_client_id"   // 사용자가 직접 입력한 OAuth 클라이언트 ID (자막 기능용)
+  LS_OAUTH: "phil_oauth_client_id",   // 사용자가 직접 입력한 OAuth 클라이언트 ID (자막 기능용)
+  LS_MODEL: "phil_gemini_model"       // 사용자가 설정 화면에서 고른 분석 모델
 };
