@@ -81,11 +81,16 @@ PhilApp.gemini = (function () {
 
   // 'thinking' 지원 모델은 최종 답변과 별개로 내부 추론을 parts[].thought=true 로 반환할 수
   // 있습니다. 그걸 답변 텍스트와 합치면 JSON 앞뒤에 잡텍스트가 붙어 파싱이 깨지므로 제외합니다.
+  // 단, 이 플래그를 다르게 쓰는 모델도 있을 수 있으므로 — 필터링했더니 텍스트가 통째로
+  // 사라지면(=이 모델이 답변 자체를 thought 로 표시하는 경우) 안전하게 필터링 전 전체
+  // 텍스트로 되돌아갑니다(구버전 동작과 동일).
   function extractText(data) {
     try {
       var parts = data.candidates[0].content.parts;
-      return parts.filter(function (p) { return !p.thought; })
+      var filtered = parts.filter(function (p) { return !p.thought; })
         .map(function (p) { return p.text || ""; }).join("");
+      if (filtered.trim()) return filtered;
+      return parts.map(function (p) { return p.text || ""; }).join("");
     } catch (e) { return ""; }
   }
 
@@ -93,14 +98,38 @@ PhilApp.gemini = (function () {
     try { return data.candidates[0].finishReason || ""; } catch (e) { return ""; }
   }
 
+  // 문자열 리터럴 안의 원문 개행/탭만 이스케이프합니다(그 밖의 위치는 건드리지 않음).
+  // 일부 모델이 JSON 문자열 값 안에 이스케이프 없는 개행을 그대로 넣는 경우를 복구합니다.
+  function escapeControlCharsInStrings(t) {
+    var out = "", inString = false;
+    for (var i = 0; i < t.length; i++) {
+      var ch = t[i];
+      if (ch === '"' && t[i - 1] !== "\\") { inString = !inString; out += ch; continue; }
+      if (inString && ch === "\n") { out += "\\n"; continue; }
+      if (inString && ch === "\r") { out += "\\r"; continue; }
+      if (inString && ch === "\t") { out += "\\t"; continue; }
+      out += ch;
+    }
+    return out;
+  }
+
   function parseJSON(text) {
     if (!text) return null;
     var t = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+
     try { return JSON.parse(t); } catch (e) {}
+
     var a = t.indexOf("{"), b = t.lastIndexOf("}");
-    if (a >= 0 && b > a) {
-      try { return JSON.parse(t.slice(a, b + 1)); } catch (e2) {}
-    }
+    if (a < 0 || b <= a) return null;
+    var core = t.slice(a, b + 1);
+
+    try { return JSON.parse(core); } catch (e2) {}
+
+    // 흔한 LLM 출력 실수 복구: 문자열 안 원문 개행 이스케이프 + 끝쪽 trailing comma 제거
+    var repaired = escapeControlCharsInStrings(core).replace(/,(\s*[}\]])/g, "$1");
+    try { return JSON.parse(repaired); } catch (e3) {}
+
+    console.error("[PhilApp.gemini] JSON 파싱 실패. 원본 응답(진단용):", text.slice(0, 4000));
     return null;
   }
 
