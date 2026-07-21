@@ -717,8 +717,8 @@ PhilApp.ui = (function () {
         '<button class="btn mini ghost" id="cmp-add-ref" data-action="add-ref">➕ 참고 채널 추가</button>' +
         '<button class="btn primary" data-action="run-comparison">🆚 비교 분석하기</button>' +
         '</div>';
-      html += '<div class="hint">참고 채널을 최소 1개, 최대 ' + maxRef + '개까지 입력하세요. 참고 채널은 별도 AI 분석 없이 ' +
-        'YouTube 데이터만 가볍게 모아 단 한 번의 비교로 처리합니다(비용 보호).</div>';
+      html += '<div class="hint">참고 채널을 최소 1개, 최대 ' + maxRef + '개까지 입력하세요. 각 참고 채널의 메시지·서사·차별점까지 ' +
+        '함께 분석하되, 비용 보호를 위해 여러 채널을 <b>단 한 번의 AI 호출</b>로 묶어 처리합니다.</div>';
     }
     html += '</div><div id="comparison-result"></div>';
     container.innerHTML = html;
@@ -798,13 +798,17 @@ PhilApp.ui = (function () {
     // ① 한눈에 보는 비교 매트릭스 (사실 데이터)
     html += comparisonMatrix(channels);
 
-    // ② 참고 채널별 정성 비교
+    // ② 참고 채널별 분석 (각 채널을 제대로 분석 + 내 채널과의 차이)
     if (rc.length) {
-      html += '<div class="card"><span class="evi-t" style="display:block;margin-bottom:10px;">📺 참고 채널별 비교</span>' +
+      html += '<div class="card"><span class="evi-t" style="display:block;margin-bottom:10px;">📺 참고 채널 분석</span>' +
         '<div class="cmp-ref-grid">' + rc.map(function (c) {
+          // 예전(간단) 결과 호환: whatTheyDoWell 만 있는 경우도 표시
           return '<div class="cmp-ref-card">' +
             '<div class="cmp-ref-name">' + esc(c.channelTitle || "") + '</div>' +
-            (c.whatTheyDoWell ? '<div class="cmp-ref-block"><span class="cmp-ref-lbl good">그 채널의 강점</span><p>' + esc(c.whatTheyDoWell) + '</p></div>' : '') +
+            (c.inferredMessage ? '<div class="cmp-ref-block"><span class="cmp-ref-lbl msg">메시지(Why)</span><p>' + esc(c.inferredMessage) + '</p></div>' : '') +
+            (c.narrativeStrengths || c.whatTheyDoWell ? '<div class="cmp-ref-block"><span class="cmp-ref-lbl good">서사 강점</span><p>' + esc(c.narrativeStrengths || c.whatTheyDoWell) + '</p></div>' : '') +
+            (c.differentiation ? '<div class="cmp-ref-block"><span class="cmp-ref-lbl diff">차별점</span><p>' + esc(c.differentiation) + '</p></div>' : '') +
+            (c.weakness ? '<div class="cmp-ref-block"><span class="cmp-ref-lbl weak">서사 빈틈</span><p>' + esc(c.weakness) + '</p></div>' : '') +
             (c.howMyChannelDiffers ? '<div class="cmp-ref-block"><span class="cmp-ref-lbl mine">내 채널과의 차이</span><p>' + esc(c.howMyChannelDiffers) + '</p></div>' : '') +
             '</div>';
         }).join("") + '</div></div>';

@@ -728,7 +728,10 @@ footer.foot { margin-top: 46px; text-align: center; color: var(--muted); font-si
 .cmp-ref-block:last-child { margin-bottom: 0; }
 .cmp-ref-block p { margin: 4px 0 0; font-size: .84rem; color: var(--text-2); line-height: 1.6; }
 .cmp-ref-lbl { font-size: .72rem; font-weight: 800; letter-spacing: .2px; }
-.cmp-ref-lbl.good { color: var(--muted); }
+.cmp-ref-lbl.msg  { color: var(--teal); }
+.cmp-ref-lbl.good { color: var(--green); }
+.cmp-ref-lbl.diff { color: var(--muted); }
+.cmp-ref-lbl.weak { color: var(--orange); }
 .cmp-ref-lbl.mine { color: var(--accent); }
 
 /* --- ③ 강점 / 보완점 2열 --- */
