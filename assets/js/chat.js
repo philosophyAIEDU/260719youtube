@@ -141,7 +141,7 @@ PhilApp.chat = (function () {
     persist();   // 질문을 보내기 전에도 저장 — 응답 전에 창을 닫아도 질문은 남도록
 
     var pastHistory = currentChannelId ? P.history.getHistory(currentChannelId) : [];
-    var systemText = P.prompts.buildChatSystem(P.state.channel, P.state.videos, P.state.signals, P.state.lastResult, pastHistory);
+    var systemText = P.prompts.buildChatSystem(P.state.channel, P.state.videos, P.state.signals, P.state.lastResult, pastHistory, P.state.scripts);
 
     P.gemini.chat(forPrompt, systemText)
       .then(function (out) {

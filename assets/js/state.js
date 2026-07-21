@@ -10,12 +10,13 @@ PhilApp.state = {
   signals: null,
   lastResult: null,
   lastModel: null,
+  scripts: null,   // 사용자가 업로드한 대본(TXT) — [{name, text}] | null
 
   set: function (patch) {
     Object.keys(patch).forEach(function (k) { PhilApp.state[k] = patch[k]; });
   },
   reset: function () {
-    this.set({ channel: null, videos: null, signals: null, lastResult: null, lastModel: null });
+    this.set({ channel: null, videos: null, signals: null, lastResult: null, lastModel: null, scripts: null });
   },
   isReady: function () {
     return !!(this.channel && this.videos && this.signals);

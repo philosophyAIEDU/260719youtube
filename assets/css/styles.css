@@ -167,6 +167,22 @@ header.topbar {
 }
 .row-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
 
+/* ===== 📄 내 대본(TXT) 업로드 ===== */
+.script-upload {
+  margin-top: 14px; padding: 12px 14px;
+  background: var(--panel); border: 1px solid var(--border-soft); border-radius: 12px;
+}
+.script-upload-label { display: block; font-size: .87rem; color: var(--text-2); margin-bottom: 9px; font-weight: 650; }
+.script-upload input[type="file"] { font-size: .85rem; color: var(--muted); max-width: 100%; }
+.script-file-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.script-file-item {
+  display: flex; align-items: center; gap: 10px; padding: 7px 11px;
+  background: var(--bg); border: 1px solid var(--border-soft); border-radius: 9px; font-size: .82rem;
+}
+.sf-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sf-len { color: var(--muted); flex-shrink: 0; }
+.sf-remove { padding: 3px 9px; flex-shrink: 0; }
+
 /* ===== search ===== */
 .searchbar { display: flex; gap: 10px; margin: 4px 0 8px; }
 .searchbar input {
@@ -612,6 +628,34 @@ footer.foot { margin-top: 46px; text-align: center; color: var(--muted); font-si
 .chd-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .chd-actions .btn { flex: 1; white-space: nowrap; }
 .chd-actions .chd-del { flex: 0 0 auto; padding: 8px 12px; }
+
+.chd-mine-badge {
+  display: inline-block; font-size: .74rem; font-weight: 800; color: #1a1200;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border-radius: 999px; padding: 2px 9px; margin-right: 6px; vertical-align: middle;
+}
+
+/* =====================================================================
+ * 🆚 참고 채널 비교
+ * ===================================================================== */
+.channel-comparison { margin: 22px 0; }
+.comparison-setup .prose { margin: 0; }
+.cmp-my {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+  padding: 10px 13px; background: var(--panel); border: 1px solid var(--border-soft); border-radius: 12px;
+}
+.cmp-my-thumb { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+.cmp-my-label {
+  font-size: .74rem; font-weight: 800; color: var(--accent); text-transform: uppercase; letter-spacing: .5px;
+  flex-shrink: 0;
+}
+.cmp-my-name { flex: 1; font-weight: 700; }
+.cmp-inputs { display: flex; flex-direction: column; gap: 9px; margin-bottom: 14px; }
+.cmp-ref-input {
+  width: 100%; padding: 11px 14px; border-radius: 11px; border: 1px solid var(--border);
+  background: var(--panel); color: var(--text); font-size: .9rem; font-family: inherit;
+}
+.cmp-ref-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
 /* ---------- 지난 분석 대비 점수 변화 (JS 로 직접 계산, AI 서술 아님) ---------- */
 .trend-delta {

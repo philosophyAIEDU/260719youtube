@@ -95,6 +95,19 @@ PhilApp.prompts = (function () {
     return lines.join("\n") + "\n";
   }
 
+  // 사용자가 직접 업로드한 대본(TXT) 블록 — 로그인·소유권 확인 없이도, 사용자가
+  // 직접 제공한 가장 신뢰도 높은 1차 자료. scripts: [{name, text}]
+  function uploadedScriptsBlock(scripts) {
+    if (!scripts || !scripts.length) return "";
+    var lines = ["", "[사용자가 직접 업로드한 대본 " + scripts.length + "개(TXT) — 본인이 직접 제공한 원문입니다. " +
+      "채널 데이터의 어떤 근거보다도 가장 신뢰도 높은 1차 자료로 취급하세요]"];
+    scripts.forEach(function (s, i) {
+      lines.push((i + 1) + ") 파일명: " + s.name);
+      lines.push("   " + s.text);
+    });
+    return lines.join("\n") + "\n";
+  }
+
   // 이 채널의 과거 분석 기록(최신순 배열, PhilApp.history.getHistory 결과)을
   // "지난 상담 요약" 텍스트로 압축. 메인 분석(트렌드 인지)과 채팅(상담 연속성) 양쪽에 사용.
   function buildHistoryDigest(history, maxItems) {
@@ -114,8 +127,8 @@ PhilApp.prompts = (function () {
     return lines.join("\n") + "\n";
   }
 
-  // 채널 정보 + 신호 + 대표 샘플 원문(+자막 발췌) — 메인 분석과 채팅이 공유하는 데이터 컨텍스트
-  function buildDataContext(channel, videos, sig, sampleSize) {
+  // 채널 정보 + 신호 + 대표 샘플 원문(+자막 발췌/업로드 대본) — 메인 분석과 채팅이 공유하는 데이터 컨텍스트
+  function buildDataContext(channel, videos, sig, sampleSize, scripts) {
     var sn = channel.snippet || {};
     var st = channel.statistics || {};
     var bs = (channel.brandingSettings && channel.brandingSettings.channel) || {};
@@ -138,11 +151,13 @@ signalBlock(sig) + "\n" +
 "\n[대표 샘플 영상 원문 " + sample.length + "개 — 상위 조회수·상위 참여율·최신·초창기·시간축 균등분포를 섞어 선정. 최신순 정렬]\n" +
 summarizeVideos(sample) +
 transcriptBlock(videos) +
+uploadedScriptsBlock(scripts) +
 "──────────────────────────────\n";
   }
 
-  function build(channel, videos, sig, history) {
+  function build(channel, videos, sig, history, scripts) {
     var hasHistory = !!(history && history.length);
+    var hasScripts = !!(scripts && scripts.length);
     var isEarlyStage = videos.length <= (PhilApp.config.LOW_VIDEO_THRESHOLD || 5);
     var header =
 "당신은 유튜브 채널의 '브랜드 서사(Brand Narrative) 전략가'" + (hasHistory ? "이자, 이 채널을 꾸준히 지켜봐 온 담당 컨설턴트" : "") + "입니다.\n" +
@@ -183,6 +198,11 @@ transcriptBlock(videos) +
 "- 확신이 낮으면 confidence 를 낮게 표시하세요. 데이터가 부족해 판단이 어려우면 그렇다고 명시하세요.\n" +
 "- [실제 발화 내용 발췌]가 제공된 경우, 그것은 채널 소유자 인증 후 자막에서 직접 추출한 1차 자료입니다.\n" +
 "  제목만으로 추측하는 것보다 그 발화 내용을 우선적인 근거로 삼아 메시지·톤·일관성을 판단하세요.\n" +
+(hasScripts ?
+"- [사용자가 직접 업로드한 대본]이 제공된 경우, 이것이 이 분석에서 가장 신뢰도 높은 1차 자료입니다.\n" +
+"  자막 발췌나 제목/설명보다도 이 대본 원문을 최우선 근거로 삼아 메시지(Why)·톤·일관성을 판단하고,\n" +
+"  coreMessage.evidence 나 contentReview 등에서 이 대본의 실제 문장·표현을 적극 인용하세요.\n"
+: "") +
 "\n" +
 "■ 정량 평가(스코어카드) 지침\n" +
 "- 5개 지표를 각각 0~100점으로 매기세요. 반드시 냉정하고 솔직하게. 점수를 부풀리지 마세요.\n" +
@@ -224,7 +244,7 @@ transcriptBlock(videos) +
 "- 창작자를 존중하되, 도움이 되도록 솔직하게. 서사가 약하면 약하다고, 왜 그런지 근거와 함께.\n" +
 "- 모든 답변은 자연스러운 한국어로, 실행 가능한 조언 위주로 작성하세요.\n";
 
-    var context = buildDataContext(channel, videos, sig) + buildHistoryDigest(history);
+    var context = buildDataContext(channel, videos, sig, null, scripts) + buildHistoryDigest(history);
 
     var schema =
 "\n위 데이터를 근거로 아래 JSON 스키마에 '정확히' 맞춰서만 응답하세요.\n" +
@@ -305,7 +325,7 @@ transcriptBlock(videos) +
    * 채팅용 시스템 지침 — 이미 생성된 분석 결과 + 데이터 컨텍스트를 근거로
    * 후속 질문에 답하게 함. 새 사실을 지어내지 않도록 강하게 제약.
    * --------------------------------------------------------------- */
-  function buildChatSystem(channel, videos, sig, lastResult, history) {
+  function buildChatSystem(channel, videos, sig, lastResult, history, scripts) {
     var sn = channel.snippet || {};
     var resultDigest = "";
     if (lastResult) {
@@ -348,7 +368,7 @@ transcriptBlock(videos) +
 (isOngoing ? "9. 이 채널을 여러 번 상담해왔다는 사실을 자연스럽게 활용하세요(예: '지난번에 말씀드린 ~은 어떻게 되셨나요').\n" : "") +
 resultDigest +
 buildHistoryDigest(history) +
-buildDataContext(channel, videos, sig, 30);
+buildDataContext(channel, videos, sig, 30, scripts);
   }
 
   /* ---------------------------------------------------------------
@@ -387,12 +407,91 @@ buildDataContext(channel, videos, sig, 30);
 "}\n";
   }
 
+  /* ---------------------------------------------------------------
+   * 참고 채널 비교 프롬프트 — '내 채널'로 지정한 채널과 참고 채널(들)을
+   * 같은 기준(브랜드 서사·차별성)으로 나란히 놓고 비교한다.
+   * bundle: { channel, videos, sig, lastResult? } — youtube.js/analysis.js 로 만든 데이터를
+   * app.js 가 그대로 조립해 넘긴다. 참고 채널마다 별도 Gemini 호출을 하지 않고
+   * (비용 보호) 이 함수 하나로 전체 비교를 1번의 호출로 처리한다.
+   * --------------------------------------------------------------- */
+  function comparisonChannelBlock(bundle, label) {
+    var sampleSize = PhilApp.config.REFERENCE_SAMPLE_SIZE || 15;
+    var sn = bundle.channel.snippet || {};
+    var st = bundle.channel.statistics || {};
+    var bs = (bundle.channel.brandingSettings && bundle.channel.brandingSettings.channel) || {};
+    var sample = A.selectSample(bundle.videos, sampleSize);
+    var lines = ["", "──────────────────────────────",
+      "[" + label + "] " + (sn.title || "-"),
+      "채널 소개글: " + ((sn.description || bs.description || "").trim() || "(소개글 없음)"),
+      "구독자 수: " + (st.hiddenSubscriberCount ? "비공개" : Number(st.subscriberCount || 0).toLocaleString("ko-KR")),
+      "총 영상 수(채널 공식): " + Number(st.videoCount || 0).toLocaleString("ko-KR"),
+      ""];
+    lines.push(signalBlock(bundle.sig));
+    lines.push("");
+    lines.push("[대표 샘플 영상 제목 " + sample.length + "개]");
+    lines.push(sample.map(function (v, i) { return (i + 1) + ") 「" + v.title + "」"; }).join("\n"));
+    if (bundle.lastResult && bundle.lastResult.coreMessage) {
+      lines.push("");
+      lines.push("이전 분석에서 추론된 이 채널의 핵심 메시지(Why): " + bundle.lastResult.coreMessage.inferredWhy);
+      if (bundle.lastResult.positioningStatement) lines.push("이전 분석 포지셔닝: " + bundle.lastResult.positioningStatement);
+    }
+    lines.push("──────────────────────────────");
+    return lines.join("\n") + "\n";
+  }
+
+  function buildComparisonPrompt(myBundle, referenceBundles) {
+    var myTitle = (myBundle.channel.snippet && myBundle.channel.snippet.title) || "내 채널";
+    var refTitles = referenceBundles.map(function (b) { return (b.channel.snippet && b.channel.snippet.title) || "참고 채널"; });
+
+    var header =
+"당신은 유튜브 채널의 '브랜드 서사(Brand Narrative) 전략가'입니다.\n" +
+"아래에는 [내 채널] " + myTitle + " 과, 사용자가 비교하고 싶어 선택한 [참고 채널] " +
+refTitles.length + "개(" + refTitles.join(", ") + ")의 데이터가 있습니다.\n" +
+"당신의 임무는 조회수·구독자 수 경쟁이 아니라, '메시지(Why)·일관성·차별성' 관점에서 내 채널을\n" +
+"참고 채널들과 나란히 놓고, 내 채널만의 강점과 보완할 점을 찾아주는 것입니다.\n" +
+"\n" +
+"■ 반드시 지켜야 할 원칙\n" +
+"1. 절대 구독자 수·조회수·업로드 빈도의 크고 작음만으로 우열을 논하지 마세요. 참고 채널이\n" +
+"   더 크더라도, 내 채널이 메시지·차별성 면에서 나은 점이 있다면 그것을 분명히 짚으세요.\n" +
+"2. 모든 비교와 주장은 아래 제공된 실제 채널 소개글·영상 제목을 근거로만 하세요. 제공되지 않은\n" +
+"   내용을 지어내지 마세요. evidence 성격의 필드에는 실제 제공된 제목을 원문 그대로 인용하세요.\n" +
+"3. 참고 채널을 깎아내리는 톤이 아니라, '그 채널은 무엇을 잘 하는지'를 먼저 존중하고, 그것과\n" +
+"   대비해 내 채널이 다른 점(다르다≠나쁘다)을 설명하세요.\n" +
+"4. 구체적인 서비스·플랫폼 브랜드명은 언급하지 마세요.\n" +
+"5. 한국어로, 실행 가능한 조언 위주로 작성하세요.\n";
+
+    var context = "\n[내 채널]\n" + comparisonChannelBlock(myBundle, "내 채널") +
+      referenceBundles.map(function (b, i) { return comparisonChannelBlock(b, "참고 채널 " + (i + 1)); }).join("");
+
+    var schema =
+"\n위 데이터를 근거로 아래 JSON 스키마에 '정확히' 맞춰서만 응답하세요.\n" +
+"마크다운·코드펜스·설명 문장 없이, 순수 JSON 객체 하나만 출력하세요. 모든 값은 한국어입니다.\n" +
+"\n" +
+"{\n" +
+'  "referenceComparisons": [   // 참고 채널마다 하나씩, 반드시 ' + refTitles.length + '개\n' +
+'    { "channelTitle": "참고 채널 이름(제공된 그대로)",\n' +
+'      "whatTheyDoWell": "그 채널이 메시지/서사 면에서 잘하는 점 1~2문장 (실제 제목 근거)",\n' +
+'      "howMyChannelDiffers": "내 채널이 이 채널과 다른 점 1~2문장 (우열이 아니라 차이로 서술, 실제 제목 근거)" }\n' +
+"  ],\n" +
+'  "myStrengths": [   // 참고 채널들과 비교했을 때 드러나는 내 채널만의 강점 2~4개\n' +
+'    { "point": "강점 요약", "evidence": "근거가 된 내 채널의 실제 데이터/제목 인용" }\n' +
+"  ],\n" +
+'  "myGaps": [   // 참고 채널들과 비교했을 때 드러나는 내 채널의 보완점 2~4개\n' +
+'    { "point": "보완점 요약", "evidence": "근거가 된 데이터/비교 관찰", "suggestion": "구체적으로 무엇을 어떻게 보완할지 1~2문장" }\n' +
+"  ],\n" +
+'  "overallPositioningVsPeers": "참고 채널들 사이에서 내 채널이 어떤 위치·역할을 차지할 수 있는지 정리한 3~4문장 총평"\n' +
+"}\n";
+
+    return header + context + schema;
+  }
+
   return {
     build: build,
     buildDataContext: buildDataContext,
     buildChatSystem: buildChatSystem,
     buildVerifyPrompt: buildVerifyPrompt,
     buildHistoryDigest: buildHistoryDigest,
+    buildComparisonPrompt: buildComparisonPrompt,
     signalText: signalBlock   // 투명성 패널에서 원본 통계 텍스트를 그대로 노출할 때 사용
   };
 })();

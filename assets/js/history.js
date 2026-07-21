@@ -1,5 +1,5 @@
 /* =====================================================================
- * history.js — 채널별 분석 이력 + 상담(채팅) 기록 저장.
+ * history.js — 채널별 분석 이력 + 상담(채팅) 기록 + 내 채널 지정 + 비교 결과 저장.
  *
  * 이 앱의 핵심 관점 전환: "매번 새로 분석"이 아니라, 한 채널을 지속적으로
  * 상담하며 함께 발전시켜가는 AI 유튜브 컨설턴트가 되도록 합니다.
@@ -8,6 +8,8 @@
  *     무엇이 나아졌는지/그대로인지"를 언급하게 합니다.
  *   · 채팅(후속 질문) 내용도 채널별로 저장되어, 나중에 다시 방문해도
  *     대화가 이어집니다.
+ *   · 여러 채널 중 하나를 '내 채널'로 지정해두면, 참고 채널과의 비교
+ *     분석에서 항상 '나'로 취급됩니다.
  *
  * 전부 이 브라우저의 localStorage 에만 저장됩니다(서버 없음, 외부 전송 없음).
  * ===================================================================== */
@@ -48,7 +50,10 @@ PhilApp.history = (function () {
   /* ---------- 채널 인덱스 (요약 목록) ---------- */
   function listChannels() {
     var idx = readJSON(cfg.LS_CHANNEL_INDEX, []);
-    return idx.slice().sort(function (a, b) { return new Date(b.lastAnalyzedAt) - new Date(a.lastAnalyzedAt); });
+    var myId = getMyChannelId();
+    return idx.slice()
+      .map(function (x) { return Object.assign({}, x, { isMine: x.id === myId }); })
+      .sort(function (a, b) { return new Date(b.lastAnalyzedAt) - new Date(a.lastAnalyzedAt); });
   }
 
   function upsertIndex(entry) {
@@ -82,6 +87,7 @@ PhilApp.history = (function () {
   function saveAnalysis(channel, sig, result, model) {
     var channelId = channel.id;
     var sn = channel.snippet || {}, st = channel.statistics || {};
+    var bs = (channel.brandingSettings && channel.brandingSettings.channel) || {};
     var record = {
       id: Date.now(),
       at: new Date().toISOString(),
@@ -94,6 +100,13 @@ PhilApp.history = (function () {
         dateRange: sig.dateRange,
         subscriberCount: st.hiddenSubscriberCount ? null : Number(st.subscriberCount || 0),
         channelVideoCount: Number(st.videoCount || 0)
+      },
+      // 채널 원본 스냅샷 — 참고 채널 비교 등에서 실시간 재조회 없이도 쓸 수 있도록 가볍게 보관
+      channelSnapshot: {
+        title: sn.title || "", description: sn.description || "", publishedAt: sn.publishedAt || null,
+        keywords: bs.keywords || "",
+        subscriberCount: st.hiddenSubscriberCount ? null : Number(st.subscriberCount || 0),
+        videoCount: Number(st.videoCount || 0), viewCount: Number(st.viewCount || 0)
       }
     };
 
@@ -119,7 +132,9 @@ PhilApp.history = (function () {
   function deleteChannel(channelId) {
     localStorage.removeItem(historyKey(channelId));
     localStorage.removeItem(cfg.LS_CHATLOG_PREFIX + channelId);
+    localStorage.removeItem(cfg.LS_COMPARISON_PREFIX + channelId);
     removeFromIndex(channelId);
+    if (getMyChannelId() === channelId) setMyChannel(null);
   }
 
   /* ---------- 채널별 상담(채팅) 기록 ---------- */
@@ -127,10 +142,29 @@ PhilApp.history = (function () {
   function getChatLog(channelId) { return readJSON(chatKey(channelId), []); }
   function saveChatLog(channelId, messages) { writeJSON(chatKey(channelId), messages); }
 
+  /* ---------- '내 채널' 지정 ---------- */
+  function getMyChannelId() {
+    return (localStorage.getItem(cfg.LS_MY_CHANNEL_ID) || "").trim() || null;
+  }
+  function setMyChannel(channelId) {
+    if (channelId) localStorage.setItem(cfg.LS_MY_CHANNEL_ID, channelId);
+    else localStorage.removeItem(cfg.LS_MY_CHANNEL_ID);
+  }
+  function isMyChannel(channelId) {
+    return !!channelId && getMyChannelId() === channelId;
+  }
+
+  /* ---------- 참고 채널 비교 결과 저장 (내 채널 ID 기준) ---------- */
+  function comparisonKey(myChannelId) { return cfg.LS_COMPARISON_PREFIX + myChannelId; }
+  function getComparison(myChannelId) { return readJSON(comparisonKey(myChannelId), null); }
+  function saveComparison(myChannelId, comparisonRecord) { writeJSON(comparisonKey(myChannelId), comparisonRecord); }
+
   return {
     listChannels: listChannels,
     getHistory: getHistory, getLatest: getLatest, getCount: getCount,
     saveAnalysis: saveAnalysis, deleteChannel: deleteChannel,
-    getChatLog: getChatLog, saveChatLog: saveChatLog
+    getChatLog: getChatLog, saveChatLog: saveChatLog,
+    getMyChannelId: getMyChannelId, setMyChannel: setMyChannel, isMyChannel: isMyChannel,
+    getComparison: getComparison, saveComparison: saveComparison
   };
 })();

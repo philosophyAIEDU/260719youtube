@@ -175,6 +175,60 @@
       });
   }
 
+  /* ---------- 📄 내 대본(TXT) 업로드 ---------- */
+  var attachedScripts = [];   // [{name, text}] — 브라우저 메모리에만 존재, 어디로도 전송되지 않음
+
+  function renderScriptFileList() {
+    var el = $("script-file-list");
+    if (!el) return;
+    if (!attachedScripts.length) { el.innerHTML = ""; return; }
+    el.innerHTML = attachedScripts.map(function (s, i) {
+      return '<div class="script-file-item">' +
+        '<span class="sf-name">📄 ' + u.esc(s.name) + '</span>' +
+        '<span class="sf-len">' + s.text.length.toLocaleString("ko-KR") + '자</span>' +
+        '<button type="button" class="btn mini ghost sf-remove" data-idx="' + i + '">✕</button>' +
+        '</div>';
+    }).join("");
+    el.querySelectorAll(".sf-remove").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        attachedScripts.splice(Number(btn.getAttribute("data-idx")), 1);
+        renderScriptFileList();
+      });
+    });
+  }
+
+  var scriptFileInput = $("script-file-input");
+  if (scriptFileInput) {
+    scriptFileInput.addEventListener("change", function () {
+      var files = Array.prototype.slice.call(scriptFileInput.files || []);
+      scriptFileInput.value = "";   // 같은 파일을 다시 선택해도 change 이벤트가 발생하도록 초기화
+      var maxFiles = P.config.SCRIPT_UPLOAD_MAX_FILES || 5;
+      var maxChars = P.config.SCRIPT_UPLOAD_MAX_CHARS_PER_FILE || 4000;
+      files.forEach(function (file) {
+        if (attachedScripts.length >= maxFiles) {
+          ui.banner("대본은 최대 " + maxFiles + "개까지 추가할 수 있습니다.", "info");
+          return;
+        }
+        if (!/\.txt$/i.test(file.name) && file.type && file.type.indexOf("text/plain") === -1) {
+          ui.banner("TXT 텍스트 파일만 추가할 수 있습니다: " + u.esc(file.name), "error");
+          return;
+        }
+        var reader = new FileReader();
+        reader.onload = function () {
+          var text = String(reader.result || "").trim();
+          if (!text) return;
+          if (text.length > maxChars) text = text.slice(0, maxChars);
+          attachedScripts.push({ name: file.name, text: text });
+          renderScriptFileList();
+        };
+        reader.onerror = function () {
+          ui.banner("파일을 읽지 못했습니다: " + u.esc(file.name), "error");
+        };
+        reader.readAsText(file);
+      });
+    });
+  }
+
   /* ---------- 분석 흐름 ---------- */
   function analyze() {
     ui.banner("");
@@ -250,10 +304,11 @@
 
         // 이 채널을 예전에도 분석한 적 있으면(지속 상담), 그 기록을 프롬프트/화면에 함께 반영
         var pastHistory = P.history.getHistory(channelObj.id);
+        var scriptsForThisRun = attachedScripts.length ? attachedScripts.slice() : null;
 
-        P.state.set({ channel: channelObj, videos: videos, signals: sig });
+        P.state.set({ channel: channelObj, videos: videos, signals: sig, scripts: scriptsForThisRun });
 
-        ui.renderResults(channelObj, videos, sig, pastHistory);
+        ui.renderResults(channelObj, videos, sig, pastHistory, scriptsForThisRun);
         if (bundle.transcriptNote) ui.banner(u.esc(bundle.transcriptNote), "info");
 
         if (!videos.length) {
@@ -261,7 +316,7 @@
           return;
         }
 
-        var prompt = P.prompts.build(channelObj, videos, sig, pastHistory);
+        var prompt = P.prompts.build(channelObj, videos, sig, pastHistory, scriptsForThisRun);
 
         P.gemini.analyze(prompt)
           .then(function (out) {
@@ -342,7 +397,11 @@
         });
 
         var fullHistory = P.history.getHistory(channelId);
-        P.state.set({ channel: channel, videos: videos, signals: sig, lastResult: latest.result, lastModel: latest.model });
+        // 실시간 채팅 그라운딩에는 현재 첨부된 대본을 활용하되(채팅은 매번 새로 호출되므로),
+        // 이미 캐시된 이 분석 결과 자체의 출처 표시(provenance)는 그 당시 그대로 두기 위해
+        // renderResults 에는 넘기지 않습니다.
+        var scriptsForChat = attachedScripts.length ? attachedScripts.slice() : null;
+        P.state.set({ channel: channel, videos: videos, signals: sig, lastResult: latest.result, lastModel: latest.model, scripts: scriptsForChat });
 
         ui.renderResults(channel, videos, sig, fullHistory.slice(1));
         ui.renderAnalysis(latest.result, latest.model, fullHistory);
@@ -356,6 +415,116 @@
         $("btn-analyze").disabled = false;
         ui.banner(u.esc((err && err.message) || "채널 데이터를 불러오지 못했습니다."), "error");
       });
+  }
+
+  /* ---------- 🆚 참고 채널 비교 ---------- */
+
+  // '내 채널' 또는 참고 채널 하나의 YouTube 데이터(채널+영상+신호)를 가볍게 수집.
+  // 참고 채널은 별도 상한(MAX_VIDEOS_FETCH_REFERENCE)을 써 비용을 낮춥니다.
+  function fetchChannelBundle(parsedOrId, cap) {
+    var parsed = (typeof parsedOrId === "string") ? { type: "id", value: parsedOrId } : parsedOrId;
+    return yt.resolveChannel(parsed).then(function (channel) {
+      return yt.fetchAllVideos(channel, { cap: cap }).then(function (fetchOut) {
+        var videos = fetchOut.videos;
+        var sig = P.analysis.computeSignals(channel, videos, {
+          fetchedCount: fetchOut.fetchedCount,
+          truncated: fetchOut.truncated,
+          channelVideoCount: channel.statistics ? Number(channel.statistics.videoCount || 0) : null
+        });
+        return { channel: channel, videos: videos, sig: sig };
+      });
+    });
+  }
+
+  function runComparison() {
+    var myId = P.history.getMyChannelId();
+    if (!myId) {
+      ui.banner("먼저 채널을 분석한 뒤 결과 화면의 '⭐ 내 채널로 표시' 버튼으로 내 채널을 지정해 주세요.", "info");
+      return;
+    }
+    if (!storage.hasKeys()) {
+      ui.banner("먼저 API 키를 입력해야 합니다. 설정 화면으로 이동합니다.", "info");
+      openSettings();
+      return;
+    }
+
+    var refInputs = Array.prototype.slice.call(document.querySelectorAll("#channel-comparison .cmp-ref-input"))
+      .map(function (inp) { return inp.value.trim(); })
+      .filter(function (v) { return v; });
+    if (!refInputs.length) {
+      ui.banner("비교할 참고 채널을 최소 1개 입력해 주세요.", "error");
+      return;
+    }
+    var maxRef = P.config.MAX_REFERENCE_CHANNELS || 3;
+    if (refInputs.length > maxRef) refInputs = refInputs.slice(0, maxRef);
+
+    var parsedRefs = [];
+    for (var i = 0; i < refInputs.length; i++) {
+      var p = yt.parseInput(refInputs[i]);
+      if (!p) {
+        ui.banner("참고 채널 주소를 다시 확인해 주세요: " + u.esc(refInputs[i]), "error");
+        return;
+      }
+      parsedRefs.push(p);
+    }
+
+    var b = storage.usingBuiltin();
+    var usingShared = b.yt || b.gm;
+    if (usingShared) {
+      var gate = P.ratelimit.check();
+      if (!gate.allowed) {
+        ui.banner(u.esc(gate.message), "info");
+        return;
+      }
+    }
+
+    var runBtn = document.querySelector("#channel-comparison [data-action='run-comparison']");
+    if (runBtn) { runBtn.disabled = true; runBtn.textContent = "비교 분석 중..."; }
+    ui.renderComparisonLoading();
+    if (usingShared) P.ratelimit.record();
+
+    fetchChannelBundle(myId, P.config.MAX_VIDEOS_FETCH)
+      .then(function (myFetched) {
+        var myBundle = {
+          channel: myFetched.channel, videos: myFetched.videos, sig: myFetched.sig,
+          lastResult: (P.history.getLatest(myId) || {}).result || null
+        };
+        return Promise.all(parsedRefs.map(function (p) { return fetchChannelBundle(p, P.config.MAX_VIDEOS_FETCH_REFERENCE); }))
+          .then(function (refFetched) {
+            var referenceBundles = refFetched.map(function (f) { return { channel: f.channel, videos: f.videos, sig: f.sig }; });
+            return { myBundle: myBundle, referenceBundles: referenceBundles };
+          });
+      })
+      .then(function (bundles) {
+        var prompt = P.prompts.buildComparisonPrompt(bundles.myBundle, bundles.referenceBundles);
+        var myTitle = (bundles.myBundle.channel.snippet && bundles.myBundle.channel.snippet.title) || "내 채널";
+        return P.gemini.analyze(prompt).then(function (out) {
+          P.history.saveComparison(myId, { at: new Date().toISOString(), model: out.model, result: out.result });
+          ui.renderComparisonResult(out.result, myTitle);
+        });
+      })
+      .catch(function (err) {
+        ui.renderComparisonError((err && err.message) || "비교 분석 중 오류가 발생했습니다.");
+      })
+      .finally(function () {
+        if (runBtn) { runBtn.disabled = false; runBtn.textContent = "🆚 비교 분석하기"; }
+      });
+  }
+
+  var channelComparisonEl = $("channel-comparison");
+  if (channelComparisonEl) {
+    channelComparisonEl.addEventListener("click", function (e) {
+      var btn = e.target.closest && e.target.closest("[data-action]");
+      if (!btn) return;
+      var action = btn.getAttribute("data-action");
+      if (action === "unset-mine") {
+        P.history.setMyChannel(null);
+        ui.renderChannelDashboard();
+        ui.renderComparisonSection();
+      } else if (action === "run-comparison") {
+        runComparison();
+      }
+    });
   }
 
   function deleteChannelRecord(channelId, title) {
@@ -386,5 +555,6 @@
   /* ---------- 초기화 ---------- */
   P.chat.init();
   ui.renderChannelDashboard();
+  ui.renderComparisonSection();
   if (!storage.hasKeys()) openSettings();
 })();

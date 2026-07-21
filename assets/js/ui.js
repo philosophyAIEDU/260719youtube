@@ -45,7 +45,7 @@ PhilApp.ui = (function () {
   }
 
   /* ---------- 데이터 출처(Provenance) 배너 — 신빙성 기능 ① ---------- */
-  function provenanceBanner(sig, history) {
+  function provenanceBanner(sig, history, scriptsCount) {
     var now = new Date();
     var stamp = now.getFullYear() + "." + String(now.getMonth() + 1).padStart(2, "0") + "." +
       String(now.getDate()).padStart(2, "0") + " " + String(now.getHours()).padStart(2, "0") + ":" +
@@ -62,6 +62,7 @@ PhilApp.ui = (function () {
       '<span class="prov-sep">·</span><span class="prov-item">활동 기간 ' + esc(range) + '</span>' +
       '<span class="prov-sep">·</span><span class="prov-item">분석 시각 ' + esc(stamp) + '</span>' +
       (sig.transcriptCount ? '<span class="prov-sep">·</span><span class="prov-item prov-transcript">🎙️ 자막 기반 분석 포함 (본인 채널 인증, ' + sig.transcriptCount + '개 영상)</span>' : '') +
+      (scriptsCount ? '<span class="prov-sep">·</span><span class="prov-item prov-transcript">📄 업로드 대본 ' + scriptsCount + '개 반영 (최우선 근거)</span>' : '') +
       '</div>' +
       (history && history.length ? historyTimeline(history) : '') +
       '<details class="data-transparency">' +
@@ -86,7 +87,7 @@ PhilApp.ui = (function () {
       '</details>';
   }
 
-  function renderResults(channel, videos, sig, history) {
+  function renderResults(channel, videos, sig, history, scripts) {
     currentVideos = videos.slice();
     sortState = { key: "views", dir: -1 };
     pageState = { page: 0 };
@@ -107,7 +108,10 @@ PhilApp.ui = (function () {
       html += '<p>' + esc(d) + (sn.description.length > 160 ? "…" : "") + '</p>';
     }
     html += '</div></div>';
+    var isMine = P.history.isMyChannel(channel.id);
     html += '<div class="topbar-actions">' +
+      '<button class="btn mini ' + (isMine ? "primary" : "ghost") + '" id="btn-mark-mine">' +
+      (isMine ? "★ 내 채널" : "⭐ 내 채널로 표시") + '</button>' +
       '<button class="btn mini" id="btn-copy-report">📋 리포트 복사</button>' +
       '<button class="btn mini" id="btn-print">🖨️ 인쇄/PDF</button>' +
       '</div></div>';
@@ -122,7 +126,7 @@ PhilApp.ui = (function () {
     html += '</div>';
 
     // 데이터 출처 배너 (신빙성) + 지난 상담 이력
-    html += provenanceBanner(sig, history);
+    html += provenanceBanner(sig, history, scripts && scripts.length);
 
     // 영상이 적은 초기 단계 채널인지 — prompts.js 와 같은 기준으로 판단
     var isEarlyStage = sig.count <= (P.config.LOW_VIDEO_THRESHOLD || 5);
@@ -167,6 +171,18 @@ PhilApp.ui = (function () {
     // 버튼 바인딩
     $("btn-print").addEventListener("click", function () { window.print(); });
     $("btn-copy-report").addEventListener("click", copyReport);
+    var markBtn = $("btn-mark-mine");
+    if (markBtn) {
+      markBtn.addEventListener("click", function () {
+        var nowMine = P.history.isMyChannel(channel.id);
+        P.history.setMyChannel(nowMine ? null : channel.id);
+        markBtn.textContent = nowMine ? "⭐ 내 채널로 표시" : "★ 내 채널";
+        markBtn.classList.toggle("primary", !nowMine);
+        markBtn.classList.toggle("ghost", nowMine);
+        renderChannelDashboard();
+        renderComparisonSection();
+      });
+    }
 
     // AI 로딩 (실제 선택된 모델명을 그대로 표시)
     var loading = '<div class="card"><div class="ai-loading"><div class="spinner"></div>' + esc(P.storage.apiModel()) + ' 가 전체 ' +
@@ -636,7 +652,7 @@ PhilApp.ui = (function () {
       html += '<div class="chd-card">';
       html += c.thumbnail ? '<img class="chd-thumb" src="' + esc(c.thumbnail) + '" alt="" />' : '<div class="chd-thumb chd-thumb-empty">🎬</div>';
       html += '<div class="chd-info">';
-      html += '<div class="chd-name">' + esc(c.title) + '</div>';
+      html += '<div class="chd-name">' + (c.isMine ? '<span class="chd-mine-badge" title="내 채널로 지정됨">⭐ 내 채널</span> ' : '') + esc(c.title) + '</div>';
       html += '<div class="chd-meta">';
       if (c.lastScore != null) html += '<span class="chd-score ' + scoreCls + '">' + c.lastScore + '점 (' + esc(c.lastGrade || "-") + ')</span>';
       html += '<span class="chd-date">' + esc(u.fmtDate(c.lastAnalyzedAt)) + ' · ' + (c.analysisCount || 1) + '회 상담</span>';
@@ -653,11 +669,113 @@ PhilApp.ui = (function () {
     u.show(container);
   }
 
+  /* =====================================================================
+   * 🆚 참고 채널 비교 — '내 채널'로 지정한 채널과 참고 채널들을 브랜드 서사
+   *   관점에서 비교. 실제 오케스트레이션(YouTube 수집 + Gemini 호출)은
+   *   app.js 의 runComparison() 이 처리하고, 여기는 렌더링만 담당합니다.
+   *   버튼은 data-action(unset-mine|run-comparison) 으로 표시하고,
+   *   실제 클릭 처리는 app.js 가 #channel-comparison 에 이벤트 위임합니다.
+   * ===================================================================== */
+  function renderComparisonSection() {
+    var container = $("channel-comparison");
+    if (!container) return;
+    var myId = P.history.getMyChannelId();
+    var channels = P.history.listChannels();
+    var mine = myId ? channels.find(function (c) { return c.id === myId; }) : null;
+
+    var html = '<div class="chd-head"><h2>🆚 참고 채널과 비교</h2></div>';
+    html += '<div class="card comparison-setup">';
+    if (!mine) {
+      html += '<p class="prose">먼저 채널을 분석한 뒤, 결과 화면 상단의 <b>"⭐ 내 채널로 표시"</b> 버튼을 눌러 ' +
+        '비교 기준이 될 내 채널을 지정해 주세요.</p>';
+    } else {
+      html += '<div class="cmp-my">' +
+        (mine.thumbnail ? '<img class="cmp-my-thumb" src="' + esc(mine.thumbnail) + '" alt="" />' : '') +
+        '<span class="cmp-my-label">내 채널</span>' +
+        '<span class="cmp-my-name">' + esc(mine.title) + '</span>' +
+        '<button class="btn mini ghost" data-action="unset-mine">해제</button></div>';
+      var maxRef = P.config.MAX_REFERENCE_CHANNELS || 3;
+      html += '<div class="cmp-inputs">';
+      for (var i = 0; i < maxRef; i++) {
+        html += '<input class="cmp-ref-input" type="text" placeholder="참고 채널 주소·핸들 ' + (i + 1) + (i === 0 ? '' : ' (선택)') + '" />';
+      }
+      html += '</div>';
+      html += '<button class="btn primary" data-action="run-comparison">🆚 비교 분석하기</button>';
+      html += '<div class="hint">참고 채널을 최소 1개, 최대 ' + maxRef + '개까지 입력하세요. 참고 채널은 YouTube 데이터만 ' +
+        '가볍게 수집해 비교하며, 별도 분석 기록으로 저장되지 않습니다.</div>';
+    }
+    html += '</div><div id="comparison-result"></div>';
+    container.innerHTML = html;
+    u.show(container);
+
+    // 이전에 비교한 결과가 있으면 그대로 복원해서 보여줌
+    if (mine) {
+      var saved = P.history.getComparison(myId);
+      if (saved && saved.result) renderComparisonResult(saved.result, mine.title);
+    }
+  }
+
+  function renderComparisonLoading() {
+    var el = $("comparison-result");
+    if (!el) return;
+    el.innerHTML = '<div class="card"><div class="ai-loading"><div class="spinner"></div>' +
+      esc(P.storage.apiModel()) + ' 가 내 채널과 참고 채널들을 비교하는 중입니다...</div></div>';
+  }
+
+  function renderComparisonError(msg) {
+    var el = $("comparison-result");
+    if (!el) return;
+    el.innerHTML = '<div class="card"><div class="banner error">' + esc(msg) + '</div></div>';
+  }
+
+  function renderComparisonResult(result, myTitle) {
+    var el = $("comparison-result");
+    if (!el) return;
+    var r = result || {};
+    var rc = r.referenceComparisons || [];
+    var strengths = r.myStrengths || [];
+    var gaps = r.myGaps || [];
+
+    var html = "";
+    if (rc.length) {
+      html += '<div class="card"><span class="evi-t" style="display:block;margin-bottom:8px;">참고 채널별 비교</span>' +
+        rc.map(function (c) {
+          return '<div class="review-row"><div class="review-head"><span class="review-pat">📺 ' + esc(c.channelTitle || "") + '</span></div>' +
+            (c.whatTheyDoWell ? '<div class="review-note"><span class="lbl">그 채널이 잘하는 점</span> ' + esc(c.whatTheyDoWell) + '</div>' : '') +
+            (c.howMyChannelDiffers ? '<div class="review-note"><span class="lbl">내 채널과 다른 점</span> ' + esc(c.howMyChannelDiffers) + '</div>' : '') +
+            '</div>';
+        }).join("") + '</div>';
+    }
+
+    html += '<div class="card"><span class="evi-t" style="display:block;margin-bottom:8px;">✅ ' + esc(myTitle || "내 채널") + '의 강점</span>' +
+      (strengths.length ? strengths.map(function (s) {
+        return '<div class="review-row"><div class="review-note">' + esc(s.point || "") + '</div>' +
+          (s.evidence ? '<div class="action-how"><span class="lbl">근거</span> ' + esc(s.evidence) + '</div>' : '') + '</div>';
+      }).join("") : '<span class="prose">강점을 생성하지 못했습니다.</span>') + '</div>';
+
+    html += '<div class="card"><span class="evi-t" style="display:block;margin-bottom:8px;">🔧 보완점</span>' +
+      (gaps.length ? gaps.map(function (g) {
+        return '<div class="review-row"><div class="review-note">' + esc(g.point || "") + '</div>' +
+          (g.evidence ? '<div class="action-how"><span class="lbl">근거</span> ' + esc(g.evidence) + '</div>' : '') +
+          (g.suggestion ? '<div class="action-why"><span class="lbl">제안</span> ' + esc(g.suggestion) + '</div>' : '') + '</div>';
+      }).join("") : '<span class="prose">보완점을 생성하지 못했습니다.</span>') + '</div>';
+
+    if (r.overallPositioningVsPeers) {
+      html += '<div class="card prose summary-card"><p>' + escML(r.overallPositioningVsPeers) + '</p></div>';
+    }
+
+    el.innerHTML = html;
+  }
+
   return {
     banner: banner,
     renderResults: renderResults,
     renderAnalysis: renderAnalysis,
     renderChannelDashboard: renderChannelDashboard,
+    renderComparisonSection: renderComparisonSection,
+    renderComparisonLoading: renderComparisonLoading,
+    renderComparisonError: renderComparisonError,
+    renderComparisonResult: renderComparisonResult,
     aiError: aiError
   };
 })();
