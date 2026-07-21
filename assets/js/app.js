@@ -419,6 +419,25 @@
 
   /* ---------- 🆚 참고 채널 비교 ---------- */
 
+  // 비교 매트릭스용 사실 요약 — AI 서술이 아니라 실제 수집 데이터로 직접 계산
+  function channelFactSummary(bundle, isMine) {
+    var ch = bundle.channel, sn = ch.snippet || {}, st = ch.statistics || {};
+    var thumb = "";
+    try { thumb = sn.thumbnails.default.url; } catch (e) {}
+    var ers = (bundle.videos || []).map(function (v) { return P.analysis.engagementRate(v); });
+    var avgEng = ers.length ? ers.reduce(function (a, b) { return a + b; }, 0) / ers.length : 0;
+    return {
+      title: sn.title || "채널",
+      thumbnail: thumb,
+      isMine: !!isMine,
+      subscriberCount: st.hiddenSubscriberCount ? null : Number(st.subscriberCount || 0),
+      videoCount: Number(st.videoCount || 0),
+      avgViews: bundle.sig.avgViews,
+      avgEngagement: avgEng,
+      spanDays: bundle.sig.spanDays
+    };
+  }
+
   // '내 채널' 또는 참고 채널 하나의 YouTube 데이터(채널+영상+신호)를 가볍게 수집.
   // 참고 채널은 별도 상한(MAX_VIDEOS_FETCH_REFERENCE)을 써 비용을 낮춥니다.
   function fetchChannelBundle(parsedOrId, cap) {
@@ -498,9 +517,11 @@
       .then(function (bundles) {
         var prompt = P.prompts.buildComparisonPrompt(bundles.myBundle, bundles.referenceBundles);
         var myTitle = (bundles.myBundle.channel.snippet && bundles.myBundle.channel.snippet.title) || "내 채널";
+        var summaries = [channelFactSummary(bundles.myBundle, true)]
+          .concat(bundles.referenceBundles.map(function (b) { return channelFactSummary(b, false); }));
         return P.gemini.analyze(prompt).then(function (out) {
-          P.history.saveComparison(myId, { at: new Date().toISOString(), model: out.model, result: out.result });
-          ui.renderComparisonResult(out.result, myTitle);
+          P.history.saveComparison(myId, { at: new Date().toISOString(), model: out.model, result: out.result, channels: summaries });
+          ui.renderComparisonResult(out.result, myTitle, summaries);
         });
       })
       .catch(function (err) {
@@ -521,9 +542,53 @@
         P.history.setMyChannel(null);
         ui.renderChannelDashboard();
         ui.renderComparisonSection();
+      } else if (action === "add-ref") {
+        addReferenceInput();
+      } else if (action === "remove-ref") {
+        removeReferenceInput(btn);
       } else if (action === "run-comparison") {
         runComparison();
       }
+    });
+  }
+
+  // 참고 채널 입력란을 동적으로 추가/삭제 — 이미 입력한 값을 잃지 않도록 재렌더 대신 직접 DOM 조작
+  function addReferenceInput() {
+    var wrap = $("cmp-inputs");
+    if (!wrap) return;
+    var max = P.config.MAX_REFERENCE_CHANNELS || 6;
+    var rows = wrap.querySelectorAll(".cmp-input-row");
+    if (rows.length >= max) {
+      ui.banner("참고 채널은 최대 " + max + "개까지 추가할 수 있습니다.", "info");
+      return;
+    }
+    var temp = document.createElement("div");
+    temp.innerHTML = ui.comparisonInputRow(true);
+    var row = temp.firstChild;
+    wrap.appendChild(row);
+    var input = row.querySelector(".cmp-ref-input");
+    if (input) input.focus();
+    syncRemoveButtons();
+  }
+
+  function removeReferenceInput(btn) {
+    var wrap = $("cmp-inputs");
+    if (!wrap) return;
+    var rows = wrap.querySelectorAll(".cmp-input-row");
+    if (rows.length <= 1) return;   // 최소 1줄은 유지
+    var row = btn.closest(".cmp-input-row");
+    if (row) row.parentNode.removeChild(row);
+    syncRemoveButtons();
+  }
+
+  // 줄이 1개뿐일 때는 삭제 버튼을 숨겨(최소 1줄 유지), 2개 이상이면 모두 보이게
+  function syncRemoveButtons() {
+    var wrap = $("cmp-inputs");
+    if (!wrap) return;
+    var rows = wrap.querySelectorAll(".cmp-input-row");
+    rows.forEach(function (row) {
+      var del = row.querySelector(".cmp-row-del");
+      if (del) del.style.visibility = rows.length > 1 ? "visible" : "hidden";
     });
   }
 

@@ -676,33 +676,49 @@ PhilApp.ui = (function () {
    *   버튼은 data-action(unset-mine|run-comparison) 으로 표시하고,
    *   실제 클릭 처리는 app.js 가 #channel-comparison 에 이벤트 위임합니다.
    * ===================================================================== */
+  // 참고 채널 입력 한 줄 (동적으로 추가/삭제 가능)
+  function comparisonInputRow(showRemove) {
+    return '<div class="cmp-input-row">' +
+      '<span class="cmp-ref-icon">📺</span>' +
+      '<input class="cmp-ref-input" type="text" placeholder="참고 채널 주소 또는 @핸들" />' +
+      '<button type="button" class="btn mini ghost cmp-row-del" data-action="remove-ref" title="이 참고 채널 삭제"' +
+      (showRemove ? '' : ' style="visibility:hidden;"') + '>✕</button>' +
+      '</div>';
+  }
+
   function renderComparisonSection() {
     var container = $("channel-comparison");
     if (!container) return;
     var myId = P.history.getMyChannelId();
     var channels = P.history.listChannels();
     var mine = myId ? channels.find(function (c) { return c.id === myId; }) : null;
+    var maxRef = P.config.MAX_REFERENCE_CHANNELS || 6;
 
-    var html = '<div class="chd-head"><h2>🆚 참고 채널과 비교</h2></div>';
+    var html = '<div class="chd-head"><h2>🆚 참고 채널과 비교</h2>' +
+      (mine ? '<span class="tag ctx">최대 ' + maxRef + '개 비교</span>' : '') + '</div>';
     html += '<div class="card comparison-setup">';
     if (!mine) {
-      html += '<p class="prose">먼저 채널을 분석한 뒤, 결과 화면 상단의 <b>"⭐ 내 채널로 표시"</b> 버튼을 눌러 ' +
-        '비교 기준이 될 내 채널을 지정해 주세요.</p>';
+      html += '<div class="cmp-empty">' +
+        '<div class="cmp-empty-icon">⭐</div>' +
+        '<p class="prose">먼저 채널을 분석한 뒤, 결과 화면 상단의 <b>"⭐ 내 채널로 표시"</b> 버튼을 눌러 ' +
+        '비교 기준이 될 <b>내 채널</b>을 지정해 주세요. 그다음 여기에서 참고 채널들과 나란히 비교할 수 있습니다.</p>' +
+        '</div>';
     } else {
       html += '<div class="cmp-my">' +
-        (mine.thumbnail ? '<img class="cmp-my-thumb" src="' + esc(mine.thumbnail) + '" alt="" />' : '') +
-        '<span class="cmp-my-label">내 채널</span>' +
-        '<span class="cmp-my-name">' + esc(mine.title) + '</span>' +
-        '<button class="btn mini ghost" data-action="unset-mine">해제</button></div>';
-      var maxRef = P.config.MAX_REFERENCE_CHANNELS || 3;
-      html += '<div class="cmp-inputs">';
-      for (var i = 0; i < maxRef; i++) {
-        html += '<input class="cmp-ref-input" type="text" placeholder="참고 채널 주소·핸들 ' + (i + 1) + (i === 0 ? '' : ' (선택)') + '" />';
-      }
-      html += '</div>';
-      html += '<button class="btn primary" data-action="run-comparison">🆚 비교 분석하기</button>';
-      html += '<div class="hint">참고 채널을 최소 1개, 최대 ' + maxRef + '개까지 입력하세요. 참고 채널은 YouTube 데이터만 ' +
-        '가볍게 수집해 비교하며, 별도 분석 기록으로 저장되지 않습니다.</div>';
+        (mine.thumbnail ? '<img class="cmp-my-thumb" src="' + esc(mine.thumbnail) + '" alt="" />' : '<span class="cmp-my-thumb cmp-my-thumb-empty">🎬</span>') +
+        '<div class="cmp-my-text"><span class="cmp-my-label">⭐ 내 채널 (비교 기준)</span>' +
+        '<span class="cmp-my-name">' + esc(mine.title) + '</span></div>' +
+        '<button class="btn mini ghost" data-action="unset-mine">지정 해제</button></div>';
+
+      html += '<div class="cmp-vs-label">VS 참고 채널</div>';
+      html += '<div class="cmp-inputs" id="cmp-inputs">' +
+        comparisonInputRow(false) + comparisonInputRow(true) + '</div>';
+      html += '<div class="cmp-controls">' +
+        '<button class="btn mini ghost" id="cmp-add-ref" data-action="add-ref">➕ 참고 채널 추가</button>' +
+        '<button class="btn primary" data-action="run-comparison">🆚 비교 분석하기</button>' +
+        '</div>';
+      html += '<div class="hint">참고 채널을 최소 1개, 최대 ' + maxRef + '개까지 입력하세요. 참고 채널은 별도 AI 분석 없이 ' +
+        'YouTube 데이터만 가볍게 모아 단 한 번의 비교로 처리합니다(비용 보호).</div>';
     }
     html += '</div><div id="comparison-result"></div>';
     container.innerHTML = html;
@@ -711,7 +727,7 @@ PhilApp.ui = (function () {
     // 이전에 비교한 결과가 있으면 그대로 복원해서 보여줌
     if (mine) {
       var saved = P.history.getComparison(myId);
-      if (saved && saved.result) renderComparisonResult(saved.result, mine.title);
+      if (saved && saved.result) renderComparisonResult(saved.result, mine.title, saved.channels);
     }
   }
 
@@ -728,7 +744,48 @@ PhilApp.ui = (function () {
     el.innerHTML = '<div class="card"><div class="banner error">' + esc(msg) + '</div></div>';
   }
 
-  function renderComparisonResult(result, myTitle) {
+  /* 한눈에 보는 비교 매트릭스 — AI 서술이 아니라 실제 수집 데이터로 JS가 직접 계산.
+   * channels: [{title, thumbnail, isMine, subscriberCount, videoCount, avgViews, avgEngagement, spanDays}] */
+  function comparisonMatrix(channels) {
+    if (!channels || channels.length < 2) return "";
+    var metrics = [
+      { label: "구독자", key: "subscriberCount", fmt: function (v) { return v == null ? "비공개" : u.fmtCompact(v); } },
+      { label: "총 영상", key: "videoCount", fmt: function (v) { return u.fmtInt(v); } },
+      { label: "평균 조회수", key: "avgViews", fmt: function (v) { return u.fmtCompact(v); } },
+      { label: "평균 참여율", key: "avgEngagement", fmt: function (v) { return u.pct(v, 2); }, resonance: true },
+      { label: "활동 기간", key: "spanDays", fmt: function (v) { return Math.max(1, Math.round((v || 0) / 30)) + "개월"; } }
+    ];
+
+    var head = '<tr><th class="cmp-metric-th">지표</th>' + channels.map(function (c) {
+      return '<th class="cmp-col-th' + (c.isMine ? " cmp-mine-col" : "") + '">' +
+        (c.thumbnail ? '<img class="cmp-col-thumb" src="' + esc(c.thumbnail) + '" alt="" />' : '<span class="cmp-col-thumb cmp-col-thumb-empty">🎬</span>') +
+        '<span class="cmp-col-name">' + (c.isMine ? '⭐ ' : '') + esc(c.title) + '</span></th>';
+    }).join("") + '</tr>';
+
+    var body = metrics.map(function (m) {
+      // 이 지표의 선두(최댓값) 인덱스 — 참여율만 강조 표시(공명이 이 앱의 핵심 지표)
+      var lead = -1, leadVal = -Infinity;
+      channels.forEach(function (c, i) {
+        var v = c[m.key];
+        if (v != null && v > leadVal) { leadVal = v; lead = i; }
+      });
+      return '<tr' + (m.resonance ? ' class="cmp-row-resonance"' : '') + '>' +
+        '<td class="cmp-metric">' + esc(m.label) + (m.resonance ? ' <span class="cmp-tag-resonance">공명</span>' : '') + '</td>' +
+        channels.map(function (c, i) {
+          var isLead = (i === lead && m.resonance);
+          return '<td class="' + (c.isMine ? "cmp-mine-col " : "") + (isLead ? "cmp-lead" : "") + '">' +
+            esc(m.fmt(c[m.key])) + (isLead ? ' <span class="cmp-lead-mark" title="이 그룹에서 참여율(공명) 최고">▲</span>' : '') + '</td>';
+        }).join("") + '</tr>';
+    }).join("");
+
+    return '<div class="card cmp-matrix-card">' +
+      '<span class="evi-t" style="display:block;margin-bottom:12px;">📊 한눈에 보는 비교</span>' +
+      '<div class="cmp-matrix-wrap"><table class="cmp-matrix"><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>' +
+      '<div class="hint">숫자는 <b>맥락</b>일 뿐입니다. 규모(구독자·조회수)보다 <b>평균 참여율(공명)</b> — 메시지가 실제로 사람에게 가 닿았는지 — 를 더 중요하게 보세요.</div>' +
+      '</div>';
+  }
+
+  function renderComparisonResult(result, myTitle, channels) {
     var el = $("comparison-result");
     if (!el) return;
     var r = result || {};
@@ -737,31 +794,42 @@ PhilApp.ui = (function () {
     var gaps = r.myGaps || [];
 
     var html = "";
+
+    // ① 한눈에 보는 비교 매트릭스 (사실 데이터)
+    html += comparisonMatrix(channels);
+
+    // ② 참고 채널별 정성 비교
     if (rc.length) {
-      html += '<div class="card"><span class="evi-t" style="display:block;margin-bottom:8px;">참고 채널별 비교</span>' +
-        rc.map(function (c) {
-          return '<div class="review-row"><div class="review-head"><span class="review-pat">📺 ' + esc(c.channelTitle || "") + '</span></div>' +
-            (c.whatTheyDoWell ? '<div class="review-note"><span class="lbl">그 채널이 잘하는 점</span> ' + esc(c.whatTheyDoWell) + '</div>' : '') +
-            (c.howMyChannelDiffers ? '<div class="review-note"><span class="lbl">내 채널과 다른 점</span> ' + esc(c.howMyChannelDiffers) + '</div>' : '') +
+      html += '<div class="card"><span class="evi-t" style="display:block;margin-bottom:10px;">📺 참고 채널별 비교</span>' +
+        '<div class="cmp-ref-grid">' + rc.map(function (c) {
+          return '<div class="cmp-ref-card">' +
+            '<div class="cmp-ref-name">' + esc(c.channelTitle || "") + '</div>' +
+            (c.whatTheyDoWell ? '<div class="cmp-ref-block"><span class="cmp-ref-lbl good">그 채널의 강점</span><p>' + esc(c.whatTheyDoWell) + '</p></div>' : '') +
+            (c.howMyChannelDiffers ? '<div class="cmp-ref-block"><span class="cmp-ref-lbl mine">내 채널과의 차이</span><p>' + esc(c.howMyChannelDiffers) + '</p></div>' : '') +
             '</div>';
-        }).join("") + '</div>';
+        }).join("") + '</div></div>';
     }
 
-    html += '<div class="card"><span class="evi-t" style="display:block;margin-bottom:8px;">✅ ' + esc(myTitle || "내 채널") + '의 강점</span>' +
-      (strengths.length ? strengths.map(function (s) {
-        return '<div class="review-row"><div class="review-note">' + esc(s.point || "") + '</div>' +
-          (s.evidence ? '<div class="action-how"><span class="lbl">근거</span> ' + esc(s.evidence) + '</div>' : '') + '</div>';
-      }).join("") : '<span class="prose">강점을 생성하지 못했습니다.</span>') + '</div>';
+    // ③ 강점 / 보완점 — 좌우 2열로 대비되게
+    html += '<div class="cmp-sg-grid">';
+    html += '<div class="card cmp-strengths"><span class="evi-t cmp-sg-title">✅ ' + esc(myTitle || "내 채널") + ' 강점</span>' +
+      (strengths.length ? '<ul class="cmp-sg-list">' + strengths.map(function (s) {
+        return '<li><div class="cmp-sg-point">' + esc(s.point || "") + '</div>' +
+          (s.evidence ? '<div class="cmp-sg-evi">근거 · ' + esc(s.evidence) + '</div>' : '') + '</li>';
+      }).join("") + '</ul>' : '<span class="prose">강점을 생성하지 못했습니다.</span>') + '</div>';
 
-    html += '<div class="card"><span class="evi-t" style="display:block;margin-bottom:8px;">🔧 보완점</span>' +
-      (gaps.length ? gaps.map(function (g) {
-        return '<div class="review-row"><div class="review-note">' + esc(g.point || "") + '</div>' +
-          (g.evidence ? '<div class="action-how"><span class="lbl">근거</span> ' + esc(g.evidence) + '</div>' : '') +
-          (g.suggestion ? '<div class="action-why"><span class="lbl">제안</span> ' + esc(g.suggestion) + '</div>' : '') + '</div>';
-      }).join("") : '<span class="prose">보완점을 생성하지 못했습니다.</span>') + '</div>';
+    html += '<div class="card cmp-gaps"><span class="evi-t cmp-sg-title">🔧 보완점</span>' +
+      (gaps.length ? '<ul class="cmp-sg-list">' + gaps.map(function (g) {
+        return '<li><div class="cmp-sg-point">' + esc(g.point || "") + '</div>' +
+          (g.evidence ? '<div class="cmp-sg-evi">근거 · ' + esc(g.evidence) + '</div>' : '') +
+          (g.suggestion ? '<div class="cmp-sg-fix">→ ' + esc(g.suggestion) + '</div>' : '') + '</li>';
+      }).join("") + '</ul>' : '<span class="prose">보완점을 생성하지 못했습니다.</span>') + '</div>';
+    html += '</div>';
 
+    // ④ 종합 포지셔닝
     if (r.overallPositioningVsPeers) {
-      html += '<div class="card prose summary-card"><p>' + escML(r.overallPositioningVsPeers) + '</p></div>';
+      html += '<div class="card cmp-positioning"><span class="evi-t">🎯 참고 채널들 사이에서 내 채널의 자리</span>' +
+        '<p>' + escML(r.overallPositioningVsPeers) + '</p></div>';
     }
 
     el.innerHTML = html;
@@ -776,6 +844,7 @@ PhilApp.ui = (function () {
     renderComparisonLoading: renderComparisonLoading,
     renderComparisonError: renderComparisonError,
     renderComparisonResult: renderComparisonResult,
+    comparisonInputRow: comparisonInputRow,
     aiError: aiError
   };
 })();
