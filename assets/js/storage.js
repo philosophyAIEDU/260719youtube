@@ -51,7 +51,12 @@ PhilApp.storage = (function () {
   // ---- 분석 모델 선택 (설정 화면 드롭다운) ----
   function getModel() { return (localStorage.getItem(cfg.LS_MODEL) || "").trim(); }
   function setModel(modelId) { localStorage.setItem(cfg.LS_MODEL, (modelId || "").trim()); }
-  function apiModel() { return getModel() || cfg.GEMINI_MODEL; }
+  // 저장된 선택이 현재 제공되는 옵션에 없으면(옵션이 삭제된 경우 등) 기본 모델로 보정
+  function apiModel() {
+    var m = getModel();
+    var valid = (cfg.GEMINI_MODEL_OPTIONS || []).some(function (o) { return o.id === m; });
+    return (m && valid) ? m : cfg.GEMINI_MODEL;
+  }
 
   return {
     getYT: getYT, getGM: getGM,

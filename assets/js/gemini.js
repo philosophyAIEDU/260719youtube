@@ -1,8 +1,8 @@
 /* =====================================================================
  * gemini.js — Google Generative Language API 클라이언트
- *   기본 모델: gemini-3.5-flash. 설정 화면에서 사용자가 다른 모델
- *   (예: gemini-3.1-flash-lite)을 고르면 storage.apiModel() 이 그 값을
- *   우선 사용합니다. 선택된 모델이 404 일 때에만 동일 계열 후보로 자동 대체.
+ *   분석 모델: gemini-3.5-flash (config.GEMINI_MODEL_OPTIONS 기준).
+ *   storage.apiModel() 이 유효한 선택을 반환하며, 그 모델이 404 일 때에만
+ *   동일 계열 후보(config.GEMINI_FALLBACKS)로 자동 대체합니다.
  *
  *   analyze() : JSON 스키마 강제 분석 모드 (스코어카드/재검증 등)
  *   chat()    : 자유 대화 모드 (후속 질문 채팅용, 일반 텍스트 응답)
