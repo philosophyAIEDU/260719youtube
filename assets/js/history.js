@@ -18,6 +18,14 @@ window.PhilApp = window.PhilApp || {};
 PhilApp.history = (function () {
   var cfg = PhilApp.config;
 
+  // Date.now() 만으로는 같은 밀리초 안에 연속 호출(예: 계획 두 개를 빠르게 추가)될 때 id 가
+  // 충돌할 수 있어, 호출마다 증가하는 카운터를 섞어 고유성을 보장합니다.
+  var _idSeq = 0;
+  function uniqueId() {
+    _idSeq = (_idSeq + 1) % 1000;
+    return Date.now() * 1000 + _idSeq;
+  }
+
   function readJSON(key, fallback) {
     try {
       var raw = localStorage.getItem(key);
@@ -89,7 +97,7 @@ PhilApp.history = (function () {
     var sn = channel.snippet || {}, st = channel.statistics || {};
     var bs = (channel.brandingSettings && channel.brandingSettings.channel) || {};
     var record = {
-      id: Date.now(),
+      id: uniqueId(),
       at: new Date().toISOString(),
       model: model || null,
       result: result,
@@ -164,10 +172,14 @@ PhilApp.history = (function () {
   function plansKey(channelId) { return cfg.LS_PLANS_PREFIX + channelId; }
   function getPlans(channelId) { return readJSON(plansKey(channelId), []); }   // 최신순
 
-  function addPlan(channelId, text) {
+  // dueDate: "YYYY-MM-DD" 형식(달력에서 쓰는 일정) 또는 null(날짜 없는 계획)
+  function addPlan(channelId, text, dueDate) {
     var t = (text || "").trim();
     if (!t) return null;
-    var entry = { id: Date.now(), text: t, createdAt: new Date().toISOString(), done: false, doneAt: null };
+    var entry = {
+      id: uniqueId(), text: t, createdAt: new Date().toISOString(), done: false, doneAt: null,
+      dueDate: (dueDate || "").trim() || null
+    };
     var list = getPlans(channelId);
     list.unshift(entry);
     var max = cfg.MAX_PLANS_PER_CHANNEL || 50;
@@ -186,6 +198,16 @@ PhilApp.history = (function () {
     return p;
   }
 
+  // 계획의 일정(달력 날짜)을 새로 지정하거나 비움(dueDate 가 빈 값이면 날짜 없음으로 전환)
+  function setPlanDueDate(channelId, planId, dueDate) {
+    var list = getPlans(channelId);
+    var p = list.find(function (x) { return x.id === planId; });
+    if (!p) return null;
+    p.dueDate = (dueDate || "").trim() || null;
+    writeJSON(plansKey(channelId), list);
+    return p;
+  }
+
   function deletePlan(channelId, planId) {
     var list = getPlans(channelId).filter(function (x) { return x.id !== planId; });
     writeJSON(plansKey(channelId), list);
@@ -198,6 +220,7 @@ PhilApp.history = (function () {
     getChatLog: getChatLog, saveChatLog: saveChatLog,
     getMyChannelId: getMyChannelId, setMyChannel: setMyChannel, isMyChannel: isMyChannel,
     getComparison: getComparison, saveComparison: saveComparison,
-    getPlans: getPlans, addPlan: addPlan, togglePlan: togglePlan, deletePlan: deletePlan
+    getPlans: getPlans, addPlan: addPlan, togglePlan: togglePlan, deletePlan: deletePlan,
+    setPlanDueDate: setPlanDueDate
   };
 })();

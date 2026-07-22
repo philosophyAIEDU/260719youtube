@@ -47,6 +47,24 @@ PhilApp.utils = (function () {
     return Math.abs(new Date(a) - new Date(b)) / 86400000;
   }
 
+  // 오늘 날짜를 로컬 기준 "YYYY-MM-DD" 로 (UTC 변환에 의한 하루 밀림 방지 — <input type="date"> 값과 직접 비교 가능)
+  function todayStr() {
+    var d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+
+  var WEEKDAY_KO = ["일", "월", "화", "수", "목", "금", "토"];
+
+  // "YYYY-MM-DD" → "7.22 (화)" 같은 표시용 포맷 (input type=date 값 그대로 파싱, 로컬 자정 기준)
+  function fmtDueDate(dateStr) {
+    if (!dateStr) return "";
+    var parts = dateStr.split("-").map(Number);
+    if (parts.length !== 3) return dateStr;
+    var d = new Date(parts[0], parts[1] - 1, parts[2]);
+    if (isNaN(d.getTime())) return dateStr;
+    return parts[1] + "." + parts[2] + " (" + WEEKDAY_KO[d.getDay()] + ")";
+  }
+
   function pct(x, digits) {
     if (!isFinite(x)) return "-";
     return (x * 100).toFixed(digits == null ? 2 : digits) + "%";
@@ -82,6 +100,7 @@ PhilApp.utils = (function () {
     esc: esc, escMultiline: escMultiline,
     fmtInt: fmtInt, fmtCompact: fmtCompact, fmtDate: fmtDate,
     daysBetween: daysBetween, pct: pct,
+    todayStr: todayStr, fmtDueDate: fmtDueDate,
     clampScore: clampScore, scoreClass: scoreClass, scoreLabel: scoreLabel
   };
 })();

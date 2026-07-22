@@ -760,22 +760,62 @@ footer.foot { margin-top: 46px; text-align: center; color: var(--muted); font-si
 }
 
 /* =====================================================================
- * 📝 다음 영상 계획 · 향후 계획 — 사용자가 직접 기록하는 메모(AI 결과 아님)
+ * 📝 다음 영상 계획 · 향후 계획 — TO-DO 목록 + 일정 캘린더
+ *   (사용자가 직접 기록하는 메모, AI 결과 아님)
  * ===================================================================== */
 .plans-card .section-note { margin-bottom: 16px; }
-.plan-add-row { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 16px; }
+.plan-add-row { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 18px; }
 .plan-input {
   flex: 1; padding: 11px 14px; border-radius: 11px; border: 1px solid var(--border);
   background: var(--panel); color: var(--text); font-size: .9rem; font-family: inherit; resize: vertical; min-height: 40px;
 }
 .plan-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.plan-add-date {
+  flex-shrink: 0; padding: 0 10px; border-radius: 11px; border: 1px solid var(--border);
+  background: var(--panel); color: var(--text); font-size: .84rem; font-family: inherit; align-self: stretch;
+}
 .plan-add-row .btn { flex-shrink: 0; align-self: flex-start; }
+
+/* --- 일정 캘린더 --- */
+.plan-cal { margin-bottom: 18px; padding: 14px 15px; background: var(--panel); border: 1px solid var(--border-soft); border-radius: 14px; }
+.plan-cal-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.plan-cal-title { font-weight: 750; font-size: .95rem; }
+.plan-cal-today-btn { margin-left: auto; }
+.plan-cal-weekdays {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 4px;
+  font-size: .72rem; font-weight: 700; color: var(--muted); text-align: center;
+}
+.plan-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.plan-cal-cell {
+  aspect-ratio: 1; border-radius: 9px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; cursor: pointer; background: var(--bg); border: 1px solid transparent; font-size: .82rem;
+}
+.plan-cal-cell.empty { background: none; cursor: default; }
+.plan-cal-cell:not(.empty):hover { border-color: var(--border); }
+.plan-cal-daynum { font-weight: 600; color: var(--text-2); }
+.plan-cal-cell.is-today { border: 1.5px solid var(--accent); }
+.plan-cal-cell.is-today .plan-cal-daynum { color: var(--accent); font-weight: 800; }
+.plan-cal-cell.is-selected { background: var(--accent-soft); border-color: var(--accent); }
+.plan-cal-cell.is-selected .plan-cal-daynum { color: var(--accent); font-weight: 800; }
+.plan-cal-cell.has-overdue .plan-cal-daynum { color: #ff9a97; }
+.plan-cal-dots { display: flex; gap: 3px; height: 6px; }
+.plan-cal-dot { width: 6px; height: 6px; border-radius: 50%; display: block; }
+.plan-cal-dot.pending { background: var(--accent); }
+.plan-cal-dot.done { background: var(--green); }
+
+/* --- 날짜 필터 바 (특정 날짜 선택 시) --- */
+.plan-filter-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin-bottom: 10px; padding: 8px 12px; background: var(--accent-soft); border-radius: 10px;
+}
+.plan-filter-label { font-weight: 700; font-size: .86rem; }
 
 .plan-group-label {
   font-size: .72rem; font-weight: 800; color: var(--muted); letter-spacing: .5px;
   text-transform: uppercase; margin: 14px 0 8px;
 }
 .plan-group-label:first-of-type { margin-top: 0; }
+.plan-group-label.plan-group-overdue { color: #ff9a97; }
 
 .plan-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .plan-item {
@@ -790,18 +830,37 @@ footer.foot { margin-top: 46px; text-align: center; color: var(--muted); font-si
 .plan-check:hover { border-color: var(--accent); }
 .plan-body-text { flex: 1; min-width: 0; }
 .plan-text { font-size: .9rem; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
-.plan-meta { font-size: .76rem; color: var(--muted); margin-top: 4px; }
+.plan-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: .76rem; color: var(--muted); margin-top: 6px; }
+.plan-date-edit {
+  padding: 2px 7px; border-radius: 7px; border: 1px solid var(--border-soft); background: var(--bg);
+  color: var(--text-2); font-size: .74rem; font-family: inherit;
+}
+.plan-overdue-badge {
+  font-size: .68rem; font-weight: 800; color: #ff9a97; border: 1px solid rgba(242,99,95,.4);
+  border-radius: 999px; padding: 1px 7px;
+}
 .plan-del { flex-shrink: 0; padding: 4px 9px; font-size: .78rem; }
 
+.plan-item.plan-overdue { border-left-color: var(--red); }
 .plan-item.plan-done { border-left-color: var(--border); opacity: .68; }
 .plan-item.plan-done .plan-text { text-decoration: line-through; color: var(--muted); }
 .plan-item.plan-done .plan-check { background: var(--green); border-color: var(--green); color: #06251a; }
+
+.plan-done-details { margin-top: 14px; }
+.plan-done-details summary {
+  cursor: pointer; font-size: .82rem; font-weight: 700; color: var(--teal);
+  list-style: none; display: flex; align-items: center; gap: 6px; margin-bottom: 8px;
+}
+.plan-done-details summary::-webkit-details-marker { display: none; }
+.plan-done-details summary::before { content: "▸"; transition: transform .15s; }
+.plan-done-details[open] summary::before { transform: rotate(90deg); }
 
 .plan-empty { padding: 6px 0; }
 
 @media (max-width: 480px) {
   .plan-add-row { flex-direction: column; }
-  .plan-add-row .btn { align-self: flex-end; }
+  .plan-add-row .btn, .plan-add-row .plan-add-date { align-self: stretch; }
+  .plan-cal-cell { font-size: .74rem; }
 }
 
 /* ---------- 지난 분석 대비 점수 변화 (JS 로 직접 계산, AI 서술 아님) ---------- */

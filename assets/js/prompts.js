@@ -108,14 +108,21 @@ PhilApp.prompts = (function () {
     return lines.join("\n") + "\n";
   }
 
-  // 사용자가 직접 기록한 '다음 영상 계획 · 향후 계획' 블록 (AI 결과가 아니라 사용자 메모).
-  // plans: PhilApp.history.getPlans() 결과, [{text, done, ...}], 최신순.
+  // 사용자가 직접 기록한 '다음 영상 계획 · 향후 계획' TO-DO 목록 블록 (AI 결과가 아니라 사용자 메모).
+  // plans: PhilApp.history.getPlans() 결과, [{text, done, dueDate, ...}], 최신순.
   function plansBlock(plans) {
     if (!plans || !plans.length) return "";
-    var lines = ["", "[사용자가 직접 기록한 향후 콘텐츠 계획 " + plans.length + "개 — 본인이 직접 적어둔 메모입니다. " +
-      "[예정]은 아직 만들지 않은 계획, [완료]는 이미 실행한 것입니다]"];
+    var today = u.todayStr();
+    var lines = ["", "[사용자가 직접 기록한 향후 콘텐츠 계획(TO-DO) " + plans.length + "개 — 본인이 직접 적어둔 일정입니다. " +
+      "[예정]은 아직 만들지 않은 계획, [완료]는 이미 실행한 것, (지연)은 예정일이 지났는데 아직 실행하지 않은 항목입니다]"];
     plans.forEach(function (p, i) {
-      lines.push((i + 1) + ") " + (p.done ? "[완료] " : "[예정] ") + p.text);
+      var tag = p.done ? "[완료]" : "[예정]";
+      var dateNote = "";
+      if (p.dueDate) {
+        var overdue = !p.done && p.dueDate < today;
+        dateNote = " (예정일 " + p.dueDate + (overdue ? ", 지연됨" : "") + ")";
+      }
+      lines.push((i + 1) + ") " + tag + " " + p.text + dateNote);
     });
     return lines.join("\n") + "\n";
   }
@@ -202,7 +209,9 @@ uploadedScriptsBlock(scripts) +
 "- nextVideos 제안 시 이미 계획된([예정]) 내용과 그대로 중복되지 않게 하고, 그 계획을 보완하거나\n" +
 "  확장하는 방향으로 제안하세요(계획을 무시하고 전혀 다른 방향을 강요하지 마세요).\n" +
 "- [완료] 표시된 항목은 실제로 실행에 옮겼다는 뜻입니다. 서사 축적이나 총평(summary)에서 그 실행을\n" +
-"  구체적으로 언급하며 진전으로 인정하세요" + (hasHistory ? "(trendNote 에도 반영 가능)" : "") + ".\n\n"
+"  구체적으로 언급하며 진전으로 인정하세요" + (hasHistory ? "(trendNote 에도 반영 가능)" : "") + ".\n" +
+"- (지연) 표시된 항목(예정일이 지났는데 미완료)이 있다면, 비난하는 톤이 아니라 자연스럽게 상기시키고\n" +
+"  왜 미뤄졌을지 함께 생각해볼 만한 조언을 부드럽게 곁들이세요.\n\n"
 : "") +
 "■ 반드시 지켜야 할 분석 원칙 (이것이 이 분석의 전부입니다)\n" +
 "1. 이 창작자가 '왜(Why)' 이 채널을 시작했는지 — 어떤 문제의식, 사명, 하고 싶은 말이 있었는지 —\n" +

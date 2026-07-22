@@ -566,45 +566,157 @@ PhilApp.ui = (function () {
   }
 
   /* =====================================================================
-   * 📝 다음 영상 계획 · 향후 계획 — AI 결과가 아니라 사용자가 직접 기록하는
-   *   메모(history.js 의 getPlans/addPlan/togglePlan/deletePlan). 다음 분석/
-   *   채팅 상담 때 prompts.js 가 이 계획을 AI에게 함께 전달합니다.
+   * 📝 다음 영상 계획 · 향후 계획 — TO-DO 목록 + 일정 캘린더.
+   *   AI 결과가 아니라 사용자가 직접 기록하는 메모(history.js 의
+   *   getPlans/addPlan/togglePlan/setPlanDueDate/deletePlan). 다음 분석/
+   *   채팅 상담 때 prompts.js 가 이 계획(예정일 포함)을 AI에게 함께 전달합니다.
    * ===================================================================== */
+
+  // 캘린더 보기 상태(월/선택된 날짜)는 렌더마다 사라지면 안 되므로 모듈 전역에 유지.
+  // 채널이 바뀌면(다른 분석) 오늘 달로 리셋.
+  var plansCalState = { channelId: null, year: 0, month: 0, selectedDate: null };
+  function ensurePlansCalState(channelId) {
+    if (plansCalState.channelId !== channelId) {
+      var now = new Date();
+      plansCalState = { channelId: channelId, year: now.getFullYear(), month: now.getMonth(), selectedDate: null };
+    }
+    return plansCalState;
+  }
+
   function planItemHtml(p) {
-    return '<li class="plan-item' + (p.done ? " plan-done" : "") + '" data-plan-id="' + p.id + '">' +
+    var today = u.todayStr();
+    var overdue = !p.done && !!p.dueDate && p.dueDate < today;
+    return '<li class="plan-item' + (p.done ? " plan-done" : "") + (overdue ? " plan-overdue" : "") + '" data-plan-id="' + p.id + '">' +
       '<button type="button" class="plan-check" data-action="toggle-plan" title="' +
       (p.done ? "완료 취소" : "완료로 표시") + '">' + (p.done ? "✓" : "") + '</button>' +
       '<div class="plan-body-text">' +
       '<div class="plan-text">' + escML(p.text) + '</div>' +
-      '<div class="plan-meta">' + u.fmtDate(p.createdAt) + (p.done && p.doneAt ? " · 완료 " + u.fmtDate(p.doneAt) : "") + '</div>' +
-      '</div>' +
+      '<div class="plan-meta">' +
+      '<input type="date" class="plan-date-edit" data-action="edit-plan-date" value="' + esc(p.dueDate || "") + '" title="일정 지정/변경" />' +
+      (overdue ? '<span class="plan-overdue-badge">지연</span>' : "") +
+      '<span class="plan-created">기록 ' + u.fmtDate(p.createdAt) + '</span>' +
+      (p.done && p.doneAt ? '<span class="plan-done-at">완료 ' + u.fmtDate(p.doneAt) + '</span>' : "") +
+      '</div></div>' +
       '<button type="button" class="btn mini ghost plan-del" data-action="delete-plan" title="삭제">✕</button>' +
       '</li>';
   }
 
-  function plansSectionHtml(channelId) {
-    var plans = P.history.getPlans(channelId);
-    var pending = plans.filter(function (p) { return !p.done; });
-    var done = plans.filter(function (p) { return p.done; });
+  var CAL_WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
-    var html = '<div class="card plans-card">';
-    html += '<p class="section-note">앞으로 만들 영상, 콘텐츠 방향, 실험해볼 아이디어 등을 자유롭게 적어두세요. ' +
-      '다음 분석이나 상담을 이어갈 때 AI가 이 계획을 참고합니다.</p>';
-    html += '<div class="plan-add-row">' +
-      '<textarea class="plan-input" rows="2" placeholder="예: 다음 영상은 ○○ 주제로, 시리즈 3편으로 만들 예정"></textarea>' +
-      '<button type="button" class="btn primary mini" data-action="add-plan">➕ 추가</button>' +
-      '</div>';
-    if (pending.length) {
-      html += '<div class="plan-group-label">예정 (' + pending.length + ')</div>';
-      html += '<ul class="plan-list">' + pending.map(planItemHtml).join("") + '</ul>';
+  function calendarCellsFor(year, month) {
+    var startWeekday = new Date(year, month, 1).getDay();
+    var daysInMonth = new Date(year, month + 1, 0).getDate();
+    var cells = [];
+    for (var i = 0; i < startWeekday; i++) cells.push(null);
+    for (var d = 1; d <= daysInMonth; d++) {
+      cells.push(year + "-" + String(month + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0"));
+    }
+    return cells;
+  }
+
+  // 일정 캘린더 — 날짜가 지정된 계획을 월간 달력 위에 점으로 표시. 날짜를 클릭하면 아래 목록이 그 날로 필터링됨.
+  function calendarHtml(plans, calState) {
+    var today = u.todayStr();
+    var byDate = {};
+    plans.forEach(function (p) {
+      if (!p.dueDate) return;
+      if (!byDate[p.dueDate]) byDate[p.dueDate] = { pending: 0, done: 0 };
+      byDate[p.dueDate][p.done ? "done" : "pending"]++;
+    });
+
+    var cells = calendarCellsFor(calState.year, calState.month);
+    var html = '<div class="plan-cal">' +
+      '<div class="plan-cal-head">' +
+      '<button type="button" class="btn mini ghost" data-action="cal-prev" title="이전 달">‹</button>' +
+      '<span class="plan-cal-title">' + calState.year + '년 ' + (calState.month + 1) + '월</span>' +
+      '<button type="button" class="btn mini ghost" data-action="cal-next" title="다음 달">›</button>' +
+      '<button type="button" class="btn mini ghost plan-cal-today-btn" data-action="cal-today">오늘</button>' +
+      '</div>' +
+      '<div class="plan-cal-weekdays">' + CAL_WEEKDAYS.map(function (w) { return '<span>' + w + '</span>'; }).join("") + '</div>' +
+      '<div class="plan-cal-grid">';
+
+    cells.forEach(function (dateStr) {
+      if (!dateStr) { html += '<div class="plan-cal-cell empty"></div>'; return; }
+      var dayNum = Number(dateStr.slice(-2));
+      var info = byDate[dateStr];
+      var cls = "plan-cal-cell" +
+        (dateStr === today ? " is-today" : "") +
+        (dateStr === calState.selectedDate ? " is-selected" : "") +
+        (info && info.pending && dateStr < today ? " has-overdue" : "");
+      html += '<div class="' + cls + '" data-action="select-day" data-date="' + dateStr + '">' +
+        '<span class="plan-cal-daynum">' + dayNum + '</span>' +
+        (info ? '<span class="plan-cal-dots">' +
+          (info.pending ? '<span class="plan-cal-dot pending"></span>' : "") +
+          (info.done ? '<span class="plan-cal-dot done"></span>' : "") +
+          '</span>' : "") +
+        '</div>';
+    });
+
+    html += '</div></div>';
+    return html;
+  }
+
+  // 캘린더 아래 TO-DO 목록 — 특정 날짜가 선택되면 그 날짜만, 아니면 지연/예정/날짜없음/완료로 그룹핑.
+  // '완료'는 <details> 로 접어두되 언제든 펼쳐서 지난 계획을 볼 수 있고, 달력에서 지난 달로 이동해도 볼 수 있음.
+  function todoListHtml(plans, calState) {
+    var today = u.todayStr();
+
+    if (calState.selectedDate) {
+      var dayPlans = plans.filter(function (p) { return p.dueDate === calState.selectedDate; });
+      var html = '<div class="plan-filter-bar">' +
+        '<span class="plan-filter-label">📅 ' + esc(u.fmtDueDate(calState.selectedDate)) + ' 일정</span>' +
+        '<button type="button" class="btn mini ghost" data-action="clear-day-filter">전체 보기</button>' +
+        '</div>';
+      html += dayPlans.length
+        ? '<ul class="plan-list">' + dayPlans.map(planItemHtml).join("") + '</ul>'
+        : '<div class="plan-empty prose">이 날짜에 등록된 계획이 없습니다. 위 입력창에서 이 날짜로 계획을 추가해보세요.</div>';
+      return html;
+    }
+
+    var byDateAsc = function (a, b) { return a.dueDate < b.dueDate ? -1 : a.dueDate > b.dueDate ? 1 : 0; };
+    var overdue = plans.filter(function (p) { return !p.done && p.dueDate && p.dueDate < today; }).sort(byDateAsc);
+    var upcoming = plans.filter(function (p) { return !p.done && p.dueDate && p.dueDate >= today; }).sort(byDateAsc);
+    var noDate = plans.filter(function (p) { return !p.done && !p.dueDate; });
+    var done = plans.filter(function (p) { return p.done; })
+      .sort(function (a, b) { return new Date(b.doneAt || b.createdAt) - new Date(a.doneAt || a.createdAt); });
+
+    var html = "";
+    if (overdue.length) {
+      html += '<div class="plan-group-label plan-group-overdue">⚠️ 지연됨 (' + overdue.length + ')</div>' +
+        '<ul class="plan-list">' + overdue.map(planItemHtml).join("") + '</ul>';
+    }
+    if (upcoming.length) {
+      html += '<div class="plan-group-label">📅 예정 (' + upcoming.length + ')</div>' +
+        '<ul class="plan-list">' + upcoming.map(planItemHtml).join("") + '</ul>';
+    }
+    if (noDate.length) {
+      html += '<div class="plan-group-label">🗒 날짜 없음 (' + noDate.length + ')</div>' +
+        '<ul class="plan-list">' + noDate.map(planItemHtml).join("") + '</ul>';
     }
     if (done.length) {
-      html += '<div class="plan-group-label">완료 (' + done.length + ')</div>';
-      html += '<ul class="plan-list">' + done.map(planItemHtml).join("") + '</ul>';
+      html += '<details class="plan-done-details"><summary>✅ 완료한 계획 보기 (' + done.length + ')</summary>' +
+        '<ul class="plan-list">' + done.map(planItemHtml).join("") + '</ul></details>';
     }
     if (!plans.length) {
       html += '<div class="plan-empty prose">아직 기록된 계획이 없습니다. 위에 첫 계획을 적어보세요.</div>';
     }
+    return html;
+  }
+
+  function plansSectionHtml(channelId) {
+    var calState = ensurePlansCalState(channelId);
+    var plans = P.history.getPlans(channelId);
+
+    var html = '<div class="card plans-card">';
+    html += '<p class="section-note">앞으로 만들 영상, 콘텐츠 방향, 실험해볼 아이디어를 TO-DO로 적고 일정도 함께 관리하세요. ' +
+      '다음 분석이나 상담을 이어갈 때 AI가 이 계획(예정일 포함)을 참고합니다.</p>';
+    html += '<div class="plan-add-row">' +
+      '<textarea class="plan-input" rows="2" placeholder="예: 다음 영상은 ○○ 주제로, 시리즈 3편으로 만들 예정"></textarea>' +
+      '<input type="date" class="plan-add-date" value="' + esc(calState.selectedDate || "") + '" title="일정(선택)" />' +
+      '<button type="button" class="btn primary mini" data-action="add-plan">➕ 추가</button>' +
+      '</div>';
+    html += calendarHtml(plans, calState);
+    html += '<div class="plan-todo">' + todoListHtml(plans, calState) + '</div>';
     html += '</div>';
     return html;
   }
@@ -614,26 +726,63 @@ PhilApp.ui = (function () {
     if (!body) return;
     body.innerHTML = plansSectionHtml(channelId);
 
-    // 클릭 위임은 body 자체(내부 innerHTML 만 매번 교체됨)에 한 번만 바인딩
+    // 클릭/변경 위임은 body 자체(내부 innerHTML 만 매번 교체됨)에 한 번만 바인딩
     if (!body._plansBound) {
       body._plansBound = true;
+
       body.addEventListener("click", function (e) {
         var btn = e.target.closest && e.target.closest("[data-action]");
         if (!btn) return;
         var action = btn.getAttribute("data-action");
+        var calState = ensurePlansCalState(channelId);
+
         if (action === "add-plan") {
           var input = body.querySelector(".plan-input");
+          var dateInput = body.querySelector(".plan-add-date");
           var text = input ? input.value.trim() : "";
           if (!text) return;
-          P.history.addPlan(channelId, text);
+          P.history.addPlan(channelId, text, dateInput ? dateInput.value : "");
           renderPlansSection(channelId);
           return;
         }
+        if (action === "cal-prev") {
+          calState.month--; if (calState.month < 0) { calState.month = 11; calState.year--; }
+          renderPlansSection(channelId); return;
+        }
+        if (action === "cal-next") {
+          calState.month++; if (calState.month > 11) { calState.month = 0; calState.year++; }
+          renderPlansSection(channelId); return;
+        }
+        if (action === "cal-today") {
+          var now = new Date();
+          calState.year = now.getFullYear(); calState.month = now.getMonth();
+          renderPlansSection(channelId); return;
+        }
+        if (action === "select-day") {
+          var date = btn.getAttribute("data-date");
+          calState.selectedDate = (calState.selectedDate === date) ? null : date;
+          renderPlansSection(channelId); return;
+        }
+        if (action === "clear-day-filter") {
+          calState.selectedDate = null;
+          renderPlansSection(channelId); return;
+        }
+
         var li = btn.closest(".plan-item");
         var planId = li ? Number(li.getAttribute("data-plan-id")) : null;
         if (!planId) return;
         if (action === "toggle-plan") { P.history.togglePlan(channelId, planId); renderPlansSection(channelId); }
         else if (action === "delete-plan") { P.history.deletePlan(channelId, planId); renderPlansSection(channelId); }
+      });
+
+      body.addEventListener("change", function (e) {
+        var input = e.target.closest && e.target.closest("[data-action='edit-plan-date']");
+        if (!input) return;
+        var li = input.closest(".plan-item");
+        var planId = li ? Number(li.getAttribute("data-plan-id")) : null;
+        if (!planId) return;
+        P.history.setPlanDueDate(channelId, planId, input.value);
+        renderPlansSection(channelId);
       });
     }
   }
