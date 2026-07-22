@@ -133,6 +133,7 @@ PhilApp.history = (function () {
     localStorage.removeItem(historyKey(channelId));
     localStorage.removeItem(cfg.LS_CHATLOG_PREFIX + channelId);
     localStorage.removeItem(cfg.LS_COMPARISON_PREFIX + channelId);
+    localStorage.removeItem(cfg.LS_PLANS_PREFIX + channelId);
     removeFromIndex(channelId);
     if (getMyChannelId() === channelId) setMyChannel(null);
   }
@@ -159,12 +160,44 @@ PhilApp.history = (function () {
   function getComparison(myChannelId) { return readJSON(comparisonKey(myChannelId), null); }
   function saveComparison(myChannelId, comparisonRecord) { writeJSON(comparisonKey(myChannelId), comparisonRecord); }
 
+  /* ---------- 📝 다음 영상 계획 · 향후 계획 (사용자가 직접 기록) ---------- */
+  function plansKey(channelId) { return cfg.LS_PLANS_PREFIX + channelId; }
+  function getPlans(channelId) { return readJSON(plansKey(channelId), []); }   // 최신순
+
+  function addPlan(channelId, text) {
+    var t = (text || "").trim();
+    if (!t) return null;
+    var entry = { id: Date.now(), text: t, createdAt: new Date().toISOString(), done: false, doneAt: null };
+    var list = getPlans(channelId);
+    list.unshift(entry);
+    var max = cfg.MAX_PLANS_PER_CHANNEL || 50;
+    if (list.length > max) list = list.slice(0, max);
+    writeJSON(plansKey(channelId), list);
+    return entry;
+  }
+
+  function togglePlan(channelId, planId) {
+    var list = getPlans(channelId);
+    var p = list.find(function (x) { return x.id === planId; });
+    if (!p) return null;
+    p.done = !p.done;
+    p.doneAt = p.done ? new Date().toISOString() : null;
+    writeJSON(plansKey(channelId), list);
+    return p;
+  }
+
+  function deletePlan(channelId, planId) {
+    var list = getPlans(channelId).filter(function (x) { return x.id !== planId; });
+    writeJSON(plansKey(channelId), list);
+  }
+
   return {
     listChannels: listChannels,
     getHistory: getHistory, getLatest: getLatest, getCount: getCount,
     saveAnalysis: saveAnalysis, deleteChannel: deleteChannel,
     getChatLog: getChatLog, saveChatLog: saveChatLog,
     getMyChannelId: getMyChannelId, setMyChannel: setMyChannel, isMyChannel: isMyChannel,
-    getComparison: getComparison, saveComparison: saveComparison
+    getComparison: getComparison, saveComparison: saveComparison,
+    getPlans: getPlans, addPlan: addPlan, togglePlan: togglePlan, deletePlan: deletePlan
   };
 })();

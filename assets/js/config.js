@@ -150,6 +150,14 @@ PhilApp.config = {
   LS_MY_CHANNEL_ID: "phil_my_channel_id",   // '내 채널'로 지정한 채널 ID (단일)
   LS_COMPARISON_PREFIX: "phil_comparison_", // + 내채널ID → 마지막 참고 채널 비교 결과
 
+  /* ===================================================================
+   * 📝 다음 영상 계획 · 향후 계획 — 분석/상담 이후 사용자가 직접 적어두는
+   *    콘텐츠 계획. AI 결과가 아니라 사용자가 직접 기록하는 메모이며,
+   *    채널별로 저장되어 다음 분석/채팅 상담 시 AI 가 참고합니다.
+   * =================================================================== */
+  MAX_PLANS_PER_CHANNEL: 50,       // 채널당 보관할 최대 계획 메모 수
+  LS_PLANS_PREFIX: "phil_plans_",  // + 채널ID → 그 채널의 계획 메모 배열
+
   LS_YT: "phil_yt_api_key",  // localStorage 키
   LS_GM: "phil_gm_api_key",
   LS_OAUTH: "phil_oauth_client_id",   // 사용자가 직접 입력한 OAuth 클라이언트 ID (자막 기능용)

@@ -108,6 +108,18 @@ PhilApp.prompts = (function () {
     return lines.join("\n") + "\n";
   }
 
+  // 사용자가 직접 기록한 '다음 영상 계획 · 향후 계획' 블록 (AI 결과가 아니라 사용자 메모).
+  // plans: PhilApp.history.getPlans() 결과, [{text, done, ...}], 최신순.
+  function plansBlock(plans) {
+    if (!plans || !plans.length) return "";
+    var lines = ["", "[사용자가 직접 기록한 향후 콘텐츠 계획 " + plans.length + "개 — 본인이 직접 적어둔 메모입니다. " +
+      "[예정]은 아직 만들지 않은 계획, [완료]는 이미 실행한 것입니다]"];
+    plans.forEach(function (p, i) {
+      lines.push((i + 1) + ") " + (p.done ? "[완료] " : "[예정] ") + p.text);
+    });
+    return lines.join("\n") + "\n";
+  }
+
   // 이 채널의 과거 분석 기록(최신순 배열, PhilApp.history.getHistory 결과)을
   // "지난 상담 요약" 텍스트로 압축. 메인 분석(트렌드 인지)과 채팅(상담 연속성) 양쪽에 사용.
   function buildHistoryDigest(history, maxItems) {
@@ -155,9 +167,10 @@ uploadedScriptsBlock(scripts) +
 "──────────────────────────────\n";
   }
 
-  function build(channel, videos, sig, history, scripts) {
+  function build(channel, videos, sig, history, scripts, plans) {
     var hasHistory = !!(history && history.length);
     var hasScripts = !!(scripts && scripts.length);
+    var hasPlans = !!(plans && plans.length);
     var isEarlyStage = videos.length <= (PhilApp.config.LOW_VIDEO_THRESHOLD || 5);
     var header =
 "당신은 유튜브 채널의 '브랜드 서사(Brand Narrative) 전략가'" + (hasHistory ? "이자, 이 채널을 꾸준히 지켜봐 온 담당 컨설턴트" : "") + "입니다.\n" +
@@ -181,6 +194,15 @@ uploadedScriptsBlock(scripts) +
 "- scorecard.dimensions 중 '서사 축적력'은 데이터가 없어 냉정히 낮게 매기되(축적을 판단할 근거\n" +
 "  자체가 없다는 게 이유), diagnosis 에는 비판이 아니라 '아직 판단하기 이른 단계'라고 설명하세요.\n" +
 "- priorityActions·roadmap 은 '무엇을 고쳐라'가 아니라 '무엇을 처음 시도해보라'는 톤으로 쓰세요.\n\n"
+: "") +
+(hasPlans ?
+"■ 사용자가 직접 기록해둔 향후 콘텐츠 계획을 참고하세요\n" +
+"- 아래 [사용자가 직접 기록한 향후 콘텐츠 계획]에 사용자 본인이 적어둔 예정([예정])/완료([완료])\n" +
+"  항목이 있습니다. 이것은 AI의 추측이 아니라 사용자가 스스로 정한 계획이므로 존중하세요.\n" +
+"- nextVideos 제안 시 이미 계획된([예정]) 내용과 그대로 중복되지 않게 하고, 그 계획을 보완하거나\n" +
+"  확장하는 방향으로 제안하세요(계획을 무시하고 전혀 다른 방향을 강요하지 마세요).\n" +
+"- [완료] 표시된 항목은 실제로 실행에 옮겼다는 뜻입니다. 서사 축적이나 총평(summary)에서 그 실행을\n" +
+"  구체적으로 언급하며 진전으로 인정하세요" + (hasHistory ? "(trendNote 에도 반영 가능)" : "") + ".\n\n"
 : "") +
 "■ 반드시 지켜야 할 분석 원칙 (이것이 이 분석의 전부입니다)\n" +
 "1. 이 창작자가 '왜(Why)' 이 채널을 시작했는지 — 어떤 문제의식, 사명, 하고 싶은 말이 있었는지 —\n" +
@@ -244,7 +266,7 @@ uploadedScriptsBlock(scripts) +
 "- 창작자를 존중하되, 도움이 되도록 솔직하게. 서사가 약하면 약하다고, 왜 그런지 근거와 함께.\n" +
 "- 모든 답변은 자연스러운 한국어로, 실행 가능한 조언 위주로 작성하세요.\n";
 
-    var context = buildDataContext(channel, videos, sig, null, scripts) + buildHistoryDigest(history);
+    var context = buildDataContext(channel, videos, sig, null, scripts) + buildHistoryDigest(history) + plansBlock(plans);
 
     var schema =
 "\n위 데이터를 근거로 아래 JSON 스키마에 '정확히' 맞춰서만 응답하세요.\n" +
@@ -325,8 +347,9 @@ uploadedScriptsBlock(scripts) +
    * 채팅용 시스템 지침 — 이미 생성된 분석 결과 + 데이터 컨텍스트를 근거로
    * 후속 질문에 답하게 함. 새 사실을 지어내지 않도록 강하게 제약.
    * --------------------------------------------------------------- */
-  function buildChatSystem(channel, videos, sig, lastResult, history, scripts) {
+  function buildChatSystem(channel, videos, sig, lastResult, history, scripts, plans) {
     var sn = channel.snippet || {};
+    var hasPlans = !!(plans && plans.length);
     var resultDigest = "";
     if (lastResult) {
       try {
@@ -366,8 +389,11 @@ uploadedScriptsBlock(scripts) +
 "   썸네일/SEO 같은 얕은 트릭에 대한 것이지, 방향성이나 수익화 상담을 피하라는 뜻이 아닙니다).\n" +
 "8. 영상이 매우 적은 초기 채널이라면, 데이터로 단정하기보다 가설과 다음 실험을 제안하는 톤을 쓰세요.\n" +
 (isOngoing ? "9. 이 채널을 여러 번 상담해왔다는 사실을 자연스럽게 활용하세요(예: '지난번에 말씀드린 ~은 어떻게 되셨나요').\n" : "") +
+(hasPlans ? "10. 사용자가 직접 기록해둔 [향후 콘텐츠 계획]을 알고 있다는 것을 자연스럽게 활용하세요(예: '지난번에\n" +
+"    계획하신 ~는 어떻게 되어가시나요', '그 계획과 연결해서 이런 것도 해보시면 어떨까요').\n" : "") +
 resultDigest +
 buildHistoryDigest(history) +
+plansBlock(plans) +
 buildDataContext(channel, videos, sig, 30, scripts);
   }
 

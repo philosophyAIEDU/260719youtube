@@ -159,6 +159,7 @@ PhilApp.ui = (function () {
       "영상 데이터 전수 분석 <span class=\"count-badge\">" + u.fmtInt(sig.fetchedCount) + "개</span>",
       { cls: "ctx", txt: sig.truncated ? "부분 수집" : "전수 수집" }, false);
     html += next("ai-summary", "종합 총평", { cls: "ai", txt: "AI" });
+    html += next("plans", "다음 영상 계획 · 향후 계획", { cls: "ctx", txt: "내가 직접 기록" }, false);
 
     currentAiIds = aiIds;
 
@@ -167,6 +168,8 @@ PhilApp.ui = (function () {
 
     // 영상 표 렌더 (데이터는 즉시)
     renderTable();
+    // 다음 영상 계획 · 향후 계획 렌더(내 기록, AI 호출과 무관하게 즉시 표시)
+    renderPlansSection(channel.id);
 
     // 버튼 바인딩
     $("btn-print").addEventListener("click", function () { window.print(); });
@@ -560,6 +563,79 @@ PhilApp.ui = (function () {
     var prevBtn = $("tbl-prev"), nextBtn = $("tbl-next");
     if (prevBtn) prevBtn.addEventListener("click", function () { pageState.page--; renderTable(); });
     if (nextBtn) nextBtn.addEventListener("click", function () { pageState.page++; renderTable(); });
+  }
+
+  /* =====================================================================
+   * 📝 다음 영상 계획 · 향후 계획 — AI 결과가 아니라 사용자가 직접 기록하는
+   *   메모(history.js 의 getPlans/addPlan/togglePlan/deletePlan). 다음 분석/
+   *   채팅 상담 때 prompts.js 가 이 계획을 AI에게 함께 전달합니다.
+   * ===================================================================== */
+  function planItemHtml(p) {
+    return '<li class="plan-item' + (p.done ? " plan-done" : "") + '" data-plan-id="' + p.id + '">' +
+      '<button type="button" class="plan-check" data-action="toggle-plan" title="' +
+      (p.done ? "완료 취소" : "완료로 표시") + '">' + (p.done ? "✓" : "") + '</button>' +
+      '<div class="plan-body-text">' +
+      '<div class="plan-text">' + escML(p.text) + '</div>' +
+      '<div class="plan-meta">' + u.fmtDate(p.createdAt) + (p.done && p.doneAt ? " · 완료 " + u.fmtDate(p.doneAt) : "") + '</div>' +
+      '</div>' +
+      '<button type="button" class="btn mini ghost plan-del" data-action="delete-plan" title="삭제">✕</button>' +
+      '</li>';
+  }
+
+  function plansSectionHtml(channelId) {
+    var plans = P.history.getPlans(channelId);
+    var pending = plans.filter(function (p) { return !p.done; });
+    var done = plans.filter(function (p) { return p.done; });
+
+    var html = '<div class="card plans-card">';
+    html += '<p class="section-note">앞으로 만들 영상, 콘텐츠 방향, 실험해볼 아이디어 등을 자유롭게 적어두세요. ' +
+      '다음 분석이나 상담을 이어갈 때 AI가 이 계획을 참고합니다.</p>';
+    html += '<div class="plan-add-row">' +
+      '<textarea class="plan-input" rows="2" placeholder="예: 다음 영상은 ○○ 주제로, 시리즈 3편으로 만들 예정"></textarea>' +
+      '<button type="button" class="btn primary mini" data-action="add-plan">➕ 추가</button>' +
+      '</div>';
+    if (pending.length) {
+      html += '<div class="plan-group-label">예정 (' + pending.length + ')</div>';
+      html += '<ul class="plan-list">' + pending.map(planItemHtml).join("") + '</ul>';
+    }
+    if (done.length) {
+      html += '<div class="plan-group-label">완료 (' + done.length + ')</div>';
+      html += '<ul class="plan-list">' + done.map(planItemHtml).join("") + '</ul>';
+    }
+    if (!plans.length) {
+      html += '<div class="plan-empty prose">아직 기록된 계획이 없습니다. 위에 첫 계획을 적어보세요.</div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function renderPlansSection(channelId) {
+    var body = $("plans-body");
+    if (!body) return;
+    body.innerHTML = plansSectionHtml(channelId);
+
+    // 클릭 위임은 body 자체(내부 innerHTML 만 매번 교체됨)에 한 번만 바인딩
+    if (!body._plansBound) {
+      body._plansBound = true;
+      body.addEventListener("click", function (e) {
+        var btn = e.target.closest && e.target.closest("[data-action]");
+        if (!btn) return;
+        var action = btn.getAttribute("data-action");
+        if (action === "add-plan") {
+          var input = body.querySelector(".plan-input");
+          var text = input ? input.value.trim() : "";
+          if (!text) return;
+          P.history.addPlan(channelId, text);
+          renderPlansSection(channelId);
+          return;
+        }
+        var li = btn.closest(".plan-item");
+        var planId = li ? Number(li.getAttribute("data-plan-id")) : null;
+        if (!planId) return;
+        if (action === "toggle-plan") { P.history.togglePlan(channelId, planId); renderPlansSection(channelId); }
+        else if (action === "delete-plan") { P.history.deletePlan(channelId, planId); renderPlansSection(channelId); }
+      });
+    }
   }
 
   /* ---------- 리포트 복사 (Markdown) ---------- */

@@ -305,6 +305,7 @@
         // 이 채널을 예전에도 분석한 적 있으면(지속 상담), 그 기록을 프롬프트/화면에 함께 반영
         var pastHistory = P.history.getHistory(channelObj.id);
         var scriptsForThisRun = attachedScripts.length ? attachedScripts.slice() : null;
+        var savedPlans = P.history.getPlans(channelObj.id);   // 사용자가 직접 기록해둔 향후 계획
 
         P.state.set({ channel: channelObj, videos: videos, signals: sig, scripts: scriptsForThisRun });
 
@@ -316,7 +317,7 @@
           return;
         }
 
-        var prompt = P.prompts.build(channelObj, videos, sig, pastHistory, scriptsForThisRun);
+        var prompt = P.prompts.build(channelObj, videos, sig, pastHistory, scriptsForThisRun, savedPlans);
 
         P.gemini.analyze(prompt)
           .then(function (out) {
