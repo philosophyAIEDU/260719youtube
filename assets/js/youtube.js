@@ -7,6 +7,7 @@ window.PhilApp = window.PhilApp || {};
 PhilApp.youtube = (function () {
   var cfg = PhilApp.config;
   var storage = PhilApp.storage;
+  var u = PhilApp.utils;
 
   function humanError(status, data) {
     var reason = "";
@@ -104,13 +105,19 @@ PhilApp.youtube = (function () {
 
   function mapVideoItem(it) {
     var s = it.statistics || {};
+    var durationIso = (it.contentDetails && it.contentDetails.duration) || "";
+    var durationSeconds = u.parseISODuration(durationIso);
+    // 쇼츠 여부는 API 가 직접 알려주지 않아 길이로 추정(config.SHORTS_MAX_SECONDS 이하)
+    var isShort = durationSeconds != null && durationSeconds > 0 && durationSeconds <= (cfg.SHORTS_MAX_SECONDS || 183);
     return {
       id: it.id,
       title: it.snippet.title,
       description: it.snippet.description || "",
       publishedAt: it.snippet.publishedAt,
       tags: it.snippet.tags || [],
-      duration: it.contentDetails && it.contentDetails.duration || "",
+      duration: durationIso,
+      durationSeconds: durationSeconds,
+      isShort: isShort,
       views: Number(s.viewCount || 0),
       likes: s.likeCount != null ? Number(s.likeCount) : null,
       comments: s.commentCount != null ? Number(s.commentCount) : null

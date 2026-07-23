@@ -47,6 +47,14 @@ PhilApp.utils = (function () {
     return Math.abs(new Date(a) - new Date(b)) / 86400000;
   }
 
+  // YouTube API 의 ISO 8601 길이 표기("PT4M13S", "PT45S" 등)를 초 단위 정수로 변환
+  function parseISODuration(iso) {
+    if (!iso) return null;
+    var m = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(iso);
+    if (!m || (!m[1] && !m[2] && !m[3])) return null;
+    return Number(m[1] || 0) * 3600 + Number(m[2] || 0) * 60 + Number(m[3] || 0);
+  }
+
   // 오늘 날짜를 로컬 기준 "YYYY-MM-DD" 로 (UTC 변환에 의한 하루 밀림 방지 — <input type="date"> 값과 직접 비교 가능)
   function todayStr() {
     var d = new Date();
@@ -99,7 +107,7 @@ PhilApp.utils = (function () {
     $: $, show: show, hide: hide,
     esc: esc, escMultiline: escMultiline,
     fmtInt: fmtInt, fmtCompact: fmtCompact, fmtDate: fmtDate,
-    daysBetween: daysBetween, pct: pct,
+    daysBetween: daysBetween, pct: pct, parseISODuration: parseISODuration,
     todayStr: todayStr, fmtDueDate: fmtDueDate,
     clampScore: clampScore, scoreClass: scoreClass, scoreLabel: scoreLabel
   };

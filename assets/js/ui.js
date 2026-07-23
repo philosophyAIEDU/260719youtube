@@ -120,6 +120,9 @@ PhilApp.ui = (function () {
     html += '<div class="metric-strip">';
     html += metric(st.hiddenSubscriberCount ? "비공개" : u.fmtCompact(st.subscriberCount), "구독자");
     html += metric(u.fmtInt(st.videoCount), "총 영상");
+    if (sig.shortsCount && sig.longformCount) {
+      html += metric("🩳 " + u.fmtInt(sig.shortsCount) + " · 🎬 " + u.fmtInt(sig.longformCount), "쇼츠 · 롱폼");
+    }
     html += metric(u.fmtCompact(st.viewCount), "총 조회수");
     html += metric(u.fmtDate(sn.publishedAt), "개설일");
     html += '<span class="metric-note">이 수치는 <b>맥락</b>일 뿐, 평가 기준이 아닙니다</span>';
@@ -506,6 +509,7 @@ PhilApp.ui = (function () {
       if (key === "publishedAt") { av = new Date(a.publishedAt).getTime(); bv = new Date(b.publishedAt).getTime(); return (av - bv) * dir; }
       if (key === "title") { av = a.title.toLowerCase(); bv = b.title.toLowerCase(); return av < bv ? -dir : av > bv ? dir : 0; }
       if (key === "engagement") { av = PhilApp.analysis.engagementRate(a); bv = PhilApp.analysis.engagementRate(b); return (av - bv) * dir; }
+      if (key === "isShort") { av = a.isShort ? 1 : 0; bv = b.isShort ? 1 : 0; return (av - bv) * dir; }
       av = a[key] == null ? -1 : a[key]; bv = b[key] == null ? -1 : b[key];
       return (av - bv) * dir;
     });
@@ -523,6 +527,7 @@ PhilApp.ui = (function () {
     h += '<div class="tablewrap"><table><thead><tr>';
     h += '<th>#</th>';
     h += '<th class="sortable" data-k="title">제목<span class="arrow">' + arw("title") + '</span></th>';
+    h += '<th class="sortable" data-k="isShort">형식<span class="arrow">' + arw("isShort") + '</span></th>';
     h += '<th class="sortable" data-k="publishedAt">업로드일<span class="arrow">' + arw("publishedAt") + '</span></th>';
     h += '<th class="sortable num" data-k="views">조회수<span class="arrow">' + arw("views") + '</span></th>';
     h += '<th class="sortable num" data-k="likes">좋아요<span class="arrow">' + arw("likes") + '</span></th>';
@@ -534,6 +539,7 @@ PhilApp.ui = (function () {
       h += '<tr>';
       h += '<td class="num">' + (startIdx + i + 1) + '</td>';
       h += '<td class="title"><a href="https://youtu.be/' + esc(v.id) + '" target="_blank" rel="noopener">' + esc(v.title) + '</a></td>';
+      h += '<td>' + (v.isShort ? '<span class="fmt-badge fmt-short">🩳 쇼츠</span>' : '<span class="fmt-badge fmt-long">🎬 롱폼</span>') + '</td>';
       h += '<td>' + u.fmtDate(v.publishedAt) + '</td>';
       h += '<td class="num">' + u.fmtInt(v.views) + '</td>';
       h += '<td class="num">' + (v.likes == null ? "비공개" : u.fmtInt(v.likes)) + '</td>';

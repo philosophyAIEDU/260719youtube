@@ -22,7 +22,7 @@ PhilApp.prompts = (function () {
   function summarizeVideos(videos) {
     return videos.map(function (v, i) {
       var desc = (v.description || "").replace(/\s+/g, " ").trim().slice(0, 220);
-      return (i + 1) + ") 「" + v.title + "」\n" +
+      return (i + 1) + ") " + (v.isShort ? "[쇼츠] " : "") + "「" + v.title + "」\n" +
         "   · 업로드: " + u.fmtDate(v.publishedAt) +
         " | 조회수 " + (v.views || 0).toLocaleString("ko-KR") +
         " | 좋아요 " + (v.likes == null ? "비공개" : v.likes.toLocaleString("ko-KR")) +
@@ -55,6 +55,19 @@ PhilApp.prompts = (function () {
         sig.keywords.map(function (k) { return k.word + "(" + k.count + ")"; }).join(", "));
     }
 
+    if (sig.shortsCount && sig.longformCount) {
+      lines.push("");
+      lines.push("[형식별 비교 — 쇼츠(짧은 영상, 길이 기준 추정)와 롱폼은 시청 습관 자체가 달라 같은 잣대로 비교하면 안 됨]");
+      lines.push("  · 쇼츠 " + sig.shortsCount.toLocaleString("ko-KR") + "개: 평균 조회수 " +
+        sig.shortsStats.avgViews.toLocaleString("ko-KR") + " / 평균 참여율 " + u.pct(sig.shortsStats.avgEngagement, 2));
+      lines.push("  · 롱폼 " + sig.longformCount.toLocaleString("ko-KR") + "개: 평균 조회수 " +
+        sig.longformStats.avgViews.toLocaleString("ko-KR") + " / 평균 참여율 " + u.pct(sig.longformStats.avgEngagement, 2));
+    } else if (sig.shortsCount) {
+      lines.push("· 형식: 수집된 영상 전부 쇼츠(짧은 영상, 길이 기준 추정)입니다.");
+    } else if (sig.longformCount) {
+      lines.push("· 형식: 수집된 영상 전부 롱폼(일반 길이) 영상입니다.");
+    }
+
     if (sig.eras) {
       lines.push("");
       lines.push("[시기별 추이 — 채널 전체 이력을 초기/중기/최근 3구간으로 나눈 통계. 성장/정체/변화를 판단하는 근거]");
@@ -69,13 +82,13 @@ PhilApp.prompts = (function () {
     lines.push("");
     lines.push("[도달 상위 5개 — 전체 데이터 중 조회수 기준]");
     sig.topByViews.forEach(function (v, i) {
-      lines.push("  " + (i + 1) + ". 「" + v.title + "」 조회수 " + (v.views || 0).toLocaleString("ko-KR"));
+      lines.push("  " + (i + 1) + ". " + (v.isShort ? "[쇼츠] " : "") + "「" + v.title + "」 조회수 " + (v.views || 0).toLocaleString("ko-KR"));
     });
 
     lines.push("");
     lines.push("[공명 상위 5개 — 전체 데이터 중 참여율((좋아요+댓글)/조회수) 기준 · 메시지가 사람에게 가 닿았을 가능성이 큰 영상]");
     sig.topByEngagement.forEach(function (v, i) {
-      lines.push("  " + (i + 1) + ". 「" + v.title + "」 참여율 " +
+      lines.push("  " + (i + 1) + ". " + (v.isShort ? "[쇼츠] " : "") + "「" + v.title + "」 참여율 " +
         u.pct(v.engagementRate, 2) + " (조회수 " + (v.views || 0).toLocaleString("ko-KR") + ")");
     });
 
@@ -178,6 +191,7 @@ uploadedScriptsBlock(scripts) +
     var hasHistory = !!(history && history.length);
     var hasScripts = !!(scripts && scripts.length);
     var hasPlans = !!(plans && plans.length);
+    var hasFormatMix = !!(sig.shortsCount && sig.longformCount);
     var isEarlyStage = videos.length <= (PhilApp.config.LOW_VIDEO_THRESHOLD || 5);
     var header =
 "당신은 유튜브 채널의 '브랜드 서사(Brand Narrative) 전략가'" + (hasHistory ? "이자, 이 채널을 꾸준히 지켜봐 온 담당 컨설턴트" : "") + "입니다.\n" +
@@ -220,12 +234,20 @@ uploadedScriptsBlock(scripts) +
 "3. 개별 영상이 흩어진 정보 조각인지, 아니면 하나의 관점·캐릭터·세계관·여정으로 축적되며\n" +
 "   '서사'를 쌓고 있는지 판단하세요. 아래 [시기별 추이]를 반드시 참고해 초기→최근 변화를 짚으세요.\n" +
 "4. 같은 분야의 다른 창작자와 무엇이 다른지 — 이 채널만의 관점/톤/캐릭터 —, 차별점을 짚으세요.\n" +
+(hasFormatMix ?
+"5. 이 채널은 쇼츠와 롱폼이 섞여 있습니다([형식별 비교] 참고). 쇼츠의 조회수·참여율과 롱폼의\n" +
+"   그것을 같은 잣대로 비교하지 마세요 — 형식마다 '보통 수준'이 다릅니다. 대신 각 형식이 이 채널의\n" +
+"   메시지·서사에 어떤 역할을 하는지 짚으세요(예: 쇼츠는 도달·신규 유입 창구, 롱폼은 서사가 실제로\n" +
+"   쌓이는 본체로 기능할 수 있음). contentPillars·nextVideos 제안 시에도 형식을 함께 고려하세요.\n"
+: "") +
 "\n" +
 "■ 신빙성(근거) 지침 — 매우 중요\n" +
 "- 이 데이터는 채널의 (사실상) 전체 영상 이력을 기반으로 계산된 통계입니다. 추측이 아니라\n" +
 "  이 통계와 아래 제공되는 실제 영상 제목/설명을 반드시 인용하며 판단하세요.\n" +
 "- evidence, aligned, drifting 등 '근거' 필드에는 실제 제공된 영상 제목을 그대로(따옴표 없이,\n" +
 "  원문 그대로) 적으세요. 지어내지 마세요. 제공되지 않은 영상 제목을 인용하면 안 됩니다.\n" +
+"- 제목 앞의 \"[쇼츠]\"는 영상 형식을 표시하는 메타데이터이지 실제 제목의 일부가 아닙니다.\n" +
+"  제목을 인용할 때는 \"[쇼츠]\" 표시 없이 그 뒤의 실제 제목만 적으세요.\n" +
 "- 확신이 낮으면 confidence 를 낮게 표시하세요. 데이터가 부족해 판단이 어려우면 그렇다고 명시하세요.\n" +
 "- [실제 발화 내용 발췌]가 제공된 경우, 그것은 채널 소유자 인증 후 자막에서 직접 추출한 1차 자료입니다.\n" +
 "  제목만으로 추측하는 것보다 그 발화 내용을 우선적인 근거로 삼아 메시지·톤·일관성을 판단하세요.\n" +

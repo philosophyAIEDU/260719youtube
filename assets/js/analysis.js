@@ -64,7 +64,16 @@ PhilApp.analysis = (function () {
   }
 
   function fmtV(v) {
-    return { title: v.title, views: v.views, likes: v.likes, comments: v.comments, publishedAt: v.publishedAt };
+    return { title: v.title, views: v.views, likes: v.likes, comments: v.comments, publishedAt: v.publishedAt, isShort: !!v.isShort };
+  }
+
+  // 쇼츠/롱폼 그룹별 통계 — 형식이 다르면 조회수·참여율의 '보통 수준' 자체가 다르므로,
+  // 같은 잣대로 섞어 판단하지 않도록 별도로 계산해둔다.
+  function formatGroupStats(list) {
+    if (!list.length) return null;
+    var views = list.map(function (v) { return v.views; });
+    var ers = list.map(engagementRate);
+    return { count: list.length, avgViews: Math.round(avg(views)), avgEngagement: avg(ers) };
   }
 
   // 시간순(오래된→최신) 정렬된 영상을 3등분해 초기/중기/최근 구간 통계 비교
@@ -147,6 +156,9 @@ PhilApp.analysis = (function () {
 
     var spanDays = sortedAsc.length >= 2 ? u.daysBetween(sortedAsc[0].publishedAt, sortedDesc[0].publishedAt) : 0;
 
+    var shorts = videos.filter(function (v) { return v.isShort; });
+    var longform = videos.filter(function (v) { return !v.isShort; });
+
     return {
       count: videos.length,
       fetchedCount: meta.fetchedCount != null ? meta.fetchedCount : videos.length,
@@ -171,7 +183,13 @@ PhilApp.analysis = (function () {
         : null,
 
       likesHidden: videos.some(function (v) { return v.likes == null; }),
-      commentsHidden: videos.some(function (v) { return v.comments == null; })
+      commentsHidden: videos.some(function (v) { return v.comments == null; }),
+
+      // 쇼츠(짧은 영상, 길이 기준 추정)/롱폼 구분 — 형식이 섞인 채널의 통계 왜곡 방지
+      shortsCount: shorts.length,
+      longformCount: longform.length,
+      shortsStats: formatGroupStats(shorts),
+      longformStats: formatGroupStats(longform)
     };
   }
 
